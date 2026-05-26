@@ -32,3 +32,12 @@ services:
       - guacd
       - postgres
     restart: unless-stopped
+
+# Pin the subnet so iptables FORWARD rules to libvirt's virbr0 (192.168.122.0/24)
+# stay valid across `docker compose down/up`. See install.sh → configure_firewall().
+networks:
+  default:
+    name: guacamole_default
+    ipam:
+      config:
+        - subnet: 172.31.0.0/16

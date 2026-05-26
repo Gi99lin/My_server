@@ -28,9 +28,22 @@ cd ~/Projects/My_server/guacamole   # or wherever the project lives on the host
 On first run the script:
 1. creates `.env` with a random `POSTGRES_PASSWORD`,
 2. generates `init/initdb.sql` from the Guacamole image (DB schema),
-3. starts the three containers.
+3. starts the three containers,
+4. opens iptables `FORWARD` between Guacamole's Docker subnet (`172.31.0.0/16`)
+   and libvirt's VM subnet (`192.168.122.0/24`), then installs
+   `iptables-persistent` so the rules survive reboot.
 
 Re-running is safe: it skips already-completed steps and does not wipe `pgdata/`.
+
+### Why the FORWARD rules?
+
+Guacamole's `guacd` container connects to the Win10 VM at `192.168.122.179:3389`.
+Docker and libvirt live on separate bridges; the default `FORWARD` chain does
+not bridge them and `guacd` gets `Connection refused`. The two ACCEPT rules
+allow that specific subnet-to-subnet path (not the whole world).
+
+The Docker subnet is pinned to `172.31.0.0/16` in `docker-compose.yml` so the
+rules stay valid even after `docker compose down/up`.
 
 ## First-time access
 
