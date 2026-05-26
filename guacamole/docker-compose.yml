@@ -25,19 +25,34 @@ services:
       POSTGRES_DATABASE: ${POSTGRES_DB:-guacamole_db}
       POSTGRES_USER: ${POSTGRES_USER:-guacamole_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Enable TOTP 2FA extension. Each user is prompted to enroll on next
+      # login (QR code → any TOTP app: Google Authenticator, Authy, Bitwarden).
+      # Required before exposing publicly.
+      TOTP_ENABLED: "true"
     ports:
-      # bind to loopback only; expose externally via NPM if needed
+      # Loopback-only fallback for emergency access via SSH tunnel
+      # (ssh -L 8080:127.0.0.1:8080). Daily access goes through NPM on
+      # proxy_network at https://rdp.gigglin.tech.
       - "127.0.0.1:8080:8080"
+    networks:
+      - default
+      - proxy_network
     depends_on:
       - guacd
       - postgres
     restart: unless-stopped
 
-# Pin the subnet so iptables FORWARD rules to libvirt's virbr0 (192.168.122.0/24)
-# stay valid across `docker compose down/up`. See install.sh → configure_firewall().
+# Two networks:
+#   - default: internal, lets guacamole-web reach guacd + postgres.
+#     Pinned subnet so iptables FORWARD rules to libvirt's virbr0
+#     (192.168.122.0/24) survive compose down/up.
+#   - proxy_network: shared bridge with Nginx Proxy Manager.
+#     NPM reaches guacamole-web by container name on this network.
 networks:
   default:
     name: guacamole_default
     ipam:
       config:
         - subnet: 172.31.0.0/16
+  proxy_network:
+    external: true

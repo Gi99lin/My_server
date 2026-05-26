@@ -78,16 +78,37 @@ rest by Guacamole.
 To restore on a fresh host: copy `pgdata/` back, copy `.env` (must match the
 password the encrypted credentials were stored with), `./install.sh`.
 
-## Exposing on a real domain (later)
+## Public access at https://rdp.gigglin.tech
 
-To put Guacamole behind NPM with HTTPS:
+`guacamole-web` is attached to both `default` (to reach guacd/postgres) and
+`proxy_network` (so NPM can reach it by container name). TOTP 2FA is enforced
+via `TOTP_ENABLED=true` — each user enrolls on next login.
 
-1. Attach the `guacamole` service to the top-level `proxy_network`
-   (add `networks: [proxy_network]` and a top-level `networks:` block with
-   `proxy_network: { external: true }`).
-2. Remove the `127.0.0.1:8080:8080` port mapping (NPM reaches it via the
-   shared network).
-3. In NPM, add a proxy host pointing at `guacamole-web:8080`, enable
-   WebSocket support, attach an LE cert.
-4. **Enable TOTP** in Guacamole before exposing publicly:
-   add `TOTP_ENABLED: "true"` env to the `guacamole` service.
+The `127.0.0.1:8080:8080` port mapping is kept as an SSH-tunnel fallback in
+case TOTP/NPM/DNS break; it is loopback-only on the server, not publicly
+exposed.
+
+### Nginx Proxy Manager setup
+
+1. NPM admin → Hosts → Proxy Hosts → **Add Proxy Host**.
+2. **Details** tab:
+   - Domain Names: `rdp.gigglin.tech`
+   - Scheme: `http`
+   - Forward Hostname / IP: `guacamole-web`
+   - Forward Port: `8080`
+   - Block Common Exploits: ✓
+   - **Websockets Support: ✓** (Guacamole's RDP stream rides on WebSocket;
+     without this the connection establishes but immediately drops)
+3. **SSL** tab:
+   - SSL Certificate: *Request a new SSL Certificate with Let's Encrypt*
+   - Force SSL: ✓
+   - HTTP/2 Support: ✓
+4. Save and wait ~30 s for LE issuance.
+
+### TOTP enrollment
+
+On the next login at `https://rdp.gigglin.tech` Guacamole shows a QR code.
+Scan with any RFC 6238 TOTP app (Google Authenticator, Authy, Bitwarden,
+1Password). Save the recovery key shown alongside — without it, loss of the
+phone means manual recovery from the `guacamole_user_totp_key` table in
+postgres.
