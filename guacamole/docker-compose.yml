@@ -29,6 +29,9 @@ services:
       # login (QR code → any TOTP app: Google Authenticator, Authy, Bitwarden).
       # Required before exposing publicly.
       TOTP_ENABLED: "true"
+      # Serve the webapp at / instead of /guacamole/, so the public URL is
+      # just https://rdp.gigglin.tech with no path suffix.
+      WEBAPP_CONTEXT: "ROOT"
     ports:
       # Loopback-only fallback for emergency access via SSH tunnel
       # (ssh -L 8080:127.0.0.1:8080). Daily access goes through NPM on

@@ -86,7 +86,8 @@ via `TOTP_ENABLED=true` — each user enrolls on next login.
 
 The `127.0.0.1:8080:8080` port mapping is kept as an SSH-tunnel fallback in
 case TOTP/NPM/DNS break; it is loopback-only on the server, not publicly
-exposed.
+exposed. With `WEBAPP_CONTEXT=ROOT` the fallback URL is
+`http://localhost:8080/` (no `/guacamole/` suffix).
 
 ### Nginx Proxy Manager setup
 
