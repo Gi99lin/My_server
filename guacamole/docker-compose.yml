@@ -1,0 +1,34 @@
+services:
+  guacd:
+    image: guacamole/guacd:1.5.5
+    container_name: guacamole-guacd
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15
+    container_name: guacamole-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-guacamole_db}
+      POSTGRES_USER: ${POSTGRES_USER:-guacamole_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+
+  guacamole:
+    image: guacamole/guacamole:1.5.5
+    container_name: guacamole-web
+    environment:
+      GUACD_HOSTNAME: guacd
+      POSTGRES_HOSTNAME: postgres
+      POSTGRES_DATABASE: ${POSTGRES_DB:-guacamole_db}
+      POSTGRES_USER: ${POSTGRES_USER:-guacamole_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      # bind to loopback only; expose externally via NPM if needed
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      - guacd
+      - postgres
+    restart: unless-stopped

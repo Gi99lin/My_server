@@ -38,6 +38,11 @@ openclaw/.env
 # Backup sensitive files
 backup/.env
 
+# Guacamole runtime data & secrets
+guacamole/.env
+guacamole/pgdata/
+guacamole/init/initdb.sql
+
 # Sensitive keys and certs
 marzneshin/.env
 client_cert.pem
