@@ -4,12 +4,14 @@
 # =============================================================
 # Runs automatically via cron at 03:00 every day.
 # Backs up: /home/gigglin/ + /var/lib/docker/volumes/ + DB dumps
+#           + libvirt VM disks + libvirt XML + /etc/iptables
 # =============================================================
 
 set -euo pipefail
 
 # --- Config ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
 LOG_FILE="/var/log/restic-backup.log"
 DUMP_DIR="/tmp/restic-db-dumps"
@@ -44,6 +46,11 @@ notify() {
   fi
 }
 
+# --- Helper: dump a DB only if the container is running ---
+container_running() {
+  docker ps --format '{{.Names}}' | grep -q "^${1}$"
+}
+
 # --- Rotate logs (keep last 5000 lines) ---
 if [[ -f "$LOG_FILE" ]] && [[ $(wc -l < "$LOG_FILE") -gt 5000 ]]; then
   tail -5000 "$LOG_FILE" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "$LOG_FILE"
@@ -55,50 +62,135 @@ log "=========================================="
 BACKUP_START=$(date +%s)
 
 # --- 1. Database dumps ---
+# Each block: check container is running, dump to $DUMP_DIR, skip on failure.
+# Skipping is preferred over failing the whole backup — a missing DB dump is
+# better than no backup at all.
 log "Step 1: Dumping databases..."
 mkdir -p "$DUMP_DIR"
 chmod 700 "$DUMP_DIR"
 
-# Nginx Proxy Manager MariaDB
-if docker ps --format '{{.Names}}' | grep -q "^nginx-proxy-manager-db$"; then
-  log "  Dumping MariaDB (nginx-proxy-manager-db)..."
+# Nginx Proxy Manager (MariaDB) ---------------------------------------
+if container_running "nginx-proxy-manager-db"; then
+  log "  Dumping nginx-proxy-manager-db (MariaDB)..."
   docker exec nginx-proxy-manager-db \
     mysqldump --all-databases -uroot -p"${NPM_DB_ROOT_PASSWORD}" \
     --single-transaction --quick --lock-tables=false \
     > "$DUMP_DIR/npm-all-databases.sql" 2>>"$LOG_FILE"
-  log "  MariaDB dump: OK ($(du -sh "$DUMP_DIR/npm-all-databases.sql" | cut -f1))"
+  log "    OK ($(du -sh "$DUMP_DIR/npm-all-databases.sql" | cut -f1))"
 else
-  log "  MariaDB container not running — skipping dump"
+  log "  nginx-proxy-manager-db not running — skipping"
 fi
 
-# Nextcloud MariaDB
-if docker ps --format '{{.Names}}' | grep -q "^nextcloud-db$"; then
-  log "  Dumping MariaDB (nextcloud-db)..."
+# Nextcloud (MariaDB) -------------------------------------------------
+if container_running "nextcloud-db"; then
+  log "  Dumping nextcloud-db (MariaDB)..."
   docker exec nextcloud-db \
-    mariadb-dump --all-databases -uroot -p"mariadbroot" \
+    mariadb-dump --all-databases -uroot -p"${NEXTCLOUD_DB_ROOT_PASSWORD:-mariadbroot}" \
     --default-character-set=utf8mb4 --single-transaction --quick --skip-extended-insert \
     > "$DUMP_DIR/nextcloud-all-databases.sql" 2>>"$LOG_FILE"
-  log "  Nextcloud DB dump: OK ($(du -sh "$DUMP_DIR/nextcloud-all-databases.sql" | cut -f1))"
+  log "    OK ($(du -sh "$DUMP_DIR/nextcloud-all-databases.sql" | cut -f1))"
 else
-  log "  Nextcloud DB container not running — skipping dump"
+  log "  nextcloud-db not running — skipping"
 fi
 
-# Marzneshin (SQLite — просто будет включён в бэкап папки)
-if docker ps --format '{{.Names}}' | grep -qi "marzneshin"; then
-  log "  Marzneshin uses SQLite — included in volume backup automatically"
+# Marzneshin (MariaDB — NOT SQLite, prior comment was wrong) ----------
+if container_running "marzneshin-db"; then
+  if [[ -n "${MARZNESHIN_DB_ROOT_PASSWORD:-}" ]]; then
+    log "  Dumping marzneshin-db (MariaDB)..."
+    docker exec marzneshin-db \
+      mariadb-dump --all-databases -uroot -p"${MARZNESHIN_DB_ROOT_PASSWORD}" \
+      --single-transaction --quick --lock-tables=false \
+      > "$DUMP_DIR/marzneshin-all-databases.sql" 2>>"$LOG_FILE"
+    log "    OK ($(du -sh "$DUMP_DIR/marzneshin-all-databases.sql" | cut -f1))"
+  else
+    log "  marzneshin-db running but MARZNESHIN_DB_ROOT_PASSWORD not set — skipping"
+  fi
+else
+  log "  marzneshin-db not running — skipping"
+fi
+
+# LibreChat (MongoDB) -------------------------------------------------
+if container_running "chat-mongodb"; then
+  log "  Dumping chat-mongodb (MongoDB)..."
+  docker exec chat-mongodb \
+    mongodump --archive --gzip \
+    > "$DUMP_DIR/librechat-mongo.archive.gz" 2>>"$LOG_FILE"
+  log "    OK ($(du -sh "$DUMP_DIR/librechat-mongo.archive.gz" | cut -f1))"
+else
+  log "  chat-mongodb not running — skipping"
+fi
+
+# AI Testcase Generator (Postgres) ------------------------------------
+if container_running "testcase-db"; then
+  if [[ -n "${TESTCASE_DB_PASSWORD:-}" ]]; then
+    log "  Dumping testcase-db (Postgres)..."
+    docker exec -e PGPASSWORD="${TESTCASE_DB_PASSWORD}" testcase-db \
+      pg_dumpall -U "${TESTCASE_DB_USER:-postgres}" \
+      > "$DUMP_DIR/testcase-all-databases.sql" 2>>"$LOG_FILE"
+    log "    OK ($(du -sh "$DUMP_DIR/testcase-all-databases.sql" | cut -f1))"
+  else
+    log "  testcase-db running but TESTCASE_DB_PASSWORD not set — skipping"
+  fi
+else
+  log "  testcase-db not running — skipping"
+fi
+
+# Guacamole (Postgres) ------------------------------------------------
+# Reads credentials directly from guacamole/.env to avoid duplicating
+# the password across two .env files.
+if container_running "guacamole-postgres"; then
+  GUAC_ENV="$PROJECT_DIR/guacamole/.env"
+  if [[ -f "$GUAC_ENV" ]]; then
+    # shellcheck source=/dev/null
+    GUAC_USER=$(grep -E '^POSTGRES_USER=' "$GUAC_ENV" | cut -d= -f2)
+    GUAC_DB=$(grep -E '^POSTGRES_DB=' "$GUAC_ENV" | cut -d= -f2)
+    GUAC_PASS=$(grep -E '^POSTGRES_PASSWORD=' "$GUAC_ENV" | cut -d= -f2)
+    GUAC_USER="${GUAC_USER:-guacamole_user}"
+    GUAC_DB="${GUAC_DB:-guacamole_db}"
+    log "  Dumping guacamole-postgres..."
+    docker exec -e PGPASSWORD="${GUAC_PASS}" guacamole-postgres \
+      pg_dump -U "${GUAC_USER}" "${GUAC_DB}" \
+      > "$DUMP_DIR/guacamole.sql" 2>>"$LOG_FILE"
+    log "    OK ($(du -sh "$DUMP_DIR/guacamole.sql" | cut -f1))"
+  else
+    log "  guacamole-postgres running but $GUAC_ENV missing — skipping"
+  fi
+else
+  log "  guacamole-postgres not running — skipping"
+fi
+
+# libvirt VM definitions ---------------------------------------------
+# Dump XML of every defined domain so the VM can be re-defined on a
+# fresh host without manually clicking through virt-install again.
+if command -v virsh >/dev/null 2>&1; then
+  log "  Dumping libvirt domain XMLs..."
+  mkdir -p "$DUMP_DIR/libvirt"
+  for dom in $(virsh list --all --name | grep -v '^$'); do
+    virsh dumpxml "$dom" > "$DUMP_DIR/libvirt/${dom}.xml" 2>>"$LOG_FILE"
+    log "    OK ${dom}.xml"
+  done
+else
+  log "  virsh not installed — skipping libvirt XML dump"
 fi
 
 # --- 2. Restic backup ---
 log "Step 2: Running restic backup..."
 
+# /var/lib/libvirt/images contains the Win10 qcow2 (worth backing up,
+# restic dedupes well) plus install ISOs (4-5 GB each, easy to re-download
+# from Microsoft / fedorapeople). Exclude the ISOs.
 restic backup \
   /home/gigglin/ \
   /var/lib/docker/volumes/ \
   /srv/nextcloud-data \
+  /var/lib/libvirt/images \
+  /etc/libvirt/qemu \
+  /etc/iptables \
   "$DUMP_DIR" \
   --exclude="/home/gigglin/.cache" \
   --exclude="/home/gigglin/.local/share/Trash" \
   --exclude="/home/gigglin/snap" \
+  --exclude="/var/lib/libvirt/images/*.iso" \
   --exclude="*.tmp" \
   --exclude="*.log.gz" \
   --exclude="node_modules" \
