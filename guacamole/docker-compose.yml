@@ -2,6 +2,11 @@ services:
   guacd:
     image: guacamole/guacd:1.5.5
     container_name: guacamole-guacd
+    volumes:
+      # Shared drive surfaced inside the RDP session. Files dropped via the
+      # Guacamole sidebar (or copied by the user inside Windows) live here
+      # on the host, persisting across container recreates.
+      - ./shared:/shared
     restart: unless-stopped
 
   postgres:

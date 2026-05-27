@@ -42,6 +42,8 @@ backup/.env
 guacamole/.env
 guacamole/pgdata/
 guacamole/init/initdb.sql
+guacamole/shared/*
+!guacamole/shared/.gitkeep
 
 # Sensitive keys and certs
 marzneshin/.env

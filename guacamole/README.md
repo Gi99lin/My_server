@@ -106,6 +106,26 @@ exposed. With `WEBAPP_CONTEXT=ROOT` the fallback URL is
    - HTTP/2 Support: ✓
 4. Save and wait ~30 s for LE issuance.
 
+### File transfer (shared drive)
+
+The Win10 VM connection has RDP Drive Redirection enabled. A directory on
+the host (`guacamole/shared/`) is bind-mounted into `guacd` at `/shared`
+and surfaced inside Windows as a network drive (default letter `G:` or
+whatever Windows assigns).
+
+Two ways to move files:
+
+1. **From browser**: open the Guacamole sidebar inside an RDP session
+   (`Ctrl+Cmd+Shift` on Mac, `Ctrl+Alt+Shift` on PC) → drag files into the
+   file panel. They appear in the shared drive immediately.
+2. **From server shell**: `cp` / `rsync` / `scp` straight to
+   `guacamole/shared/` on the host. Files appear in Windows next time it
+   refreshes the drive listing.
+
+The directory is persistent (lives on the host, not inside the container)
+and untracked by git. Don't put secrets there if anyone else has shell
+access to the host.
+
 ### TOTP enrollment
 
 On the next login at `https://rdp.gigglin.tech` Guacamole shows a QR code.
