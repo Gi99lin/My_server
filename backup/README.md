@@ -11,6 +11,7 @@
 - `/var/lib/libvirt/images` — диски виртуалок (Win10 VM) — **ISO-файлы исключены**
 - `/etc/libvirt/qemu` — XML-определения libvirt-доменов
 - `/etc/iptables` — persistent правила iptables (forward между Docker и libvirt)
+- `/var/lib/marznode` — marznode keypair, hysteria cert/key, конфиги VPN-нод (bind-mount, не Docker volume)
 
 Дампы баз данных (только если контейнер запущен):
 - `nginx-proxy-manager-db` (MariaDB)

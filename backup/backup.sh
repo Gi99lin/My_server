@@ -94,16 +94,20 @@ else
 fi
 
 # Marzneshin (MariaDB — NOT SQLite, prior comment was wrong) ----------
-if container_running "marzneshin-db"; then
+# The container name carries the compose project prefix
+# (e.g. marzneshin-marzneshin-db-1), so resolve it by pattern instead
+# of hardcoding "marzneshin-db" — otherwise the dump is silently skipped.
+MARZ_DB=$(docker ps --format '{{.Names}}' | grep -E '^marzneshin.*db' | head -1)
+if [[ -n "$MARZ_DB" ]]; then
   if [[ -n "${MARZNESHIN_DB_ROOT_PASSWORD:-}" ]]; then
-    log "  Dumping marzneshin-db (MariaDB)..."
-    docker exec marzneshin-db \
+    log "  Dumping $MARZ_DB (MariaDB)..."
+    docker exec "$MARZ_DB" \
       mariadb-dump --all-databases -uroot -p"${MARZNESHIN_DB_ROOT_PASSWORD}" \
       --single-transaction --quick --lock-tables=false \
       > "$DUMP_DIR/marzneshin-all-databases.sql" 2>>"$LOG_FILE"
     log "    OK ($(du -sh "$DUMP_DIR/marzneshin-all-databases.sql" | cut -f1))"
   else
-    log "  marzneshin-db running but MARZNESHIN_DB_ROOT_PASSWORD not set — skipping"
+    log "  $MARZ_DB running but MARZNESHIN_DB_ROOT_PASSWORD not set — skipping"
   fi
 else
   log "  marzneshin-db not running — skipping"
@@ -186,6 +190,7 @@ restic backup \
   /var/lib/libvirt/images \
   /etc/libvirt/qemu \
   /etc/iptables \
+  /var/lib/marznode \
   "$DUMP_DIR" \
   --exclude="/home/gigglin/.cache" \
   --exclude="/home/gigglin/.local/share/Trash" \
