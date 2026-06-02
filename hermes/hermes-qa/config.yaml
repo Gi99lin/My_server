@@ -41,6 +41,7 @@ mcp_servers:
     - ws://browserless:3000
   telegram:
     url: http://telegram-mcp:8932/sse
+    transport: sse
 onboarding:
   seen:
     busy_input_prompt: true
