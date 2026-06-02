@@ -1,5 +1,5 @@
 model:
-  default: antigravity/gemini-3.1-pro-low
+  default: cx/gpt-5.5-high
   provider: custom
   base_url: http://spawn-sanitizer:18780/v1
 agent:
@@ -28,7 +28,7 @@ display:
   skin: slate
 model_aliases:
   gemini:
-    model: antigravity/gemini-3.1-pro-low
+    model: cx/gpt-5.5-high
     provider: custom
     base_url: http://spawn-sanitizer:18780/v1
 mcp_servers:
@@ -39,6 +39,8 @@ mcp_servers:
     - '@playwright/mcp@latest'
     - --cdp-endpoint
     - ws://browserless:3000
+  telegram:
+    url: http://telegram-mcp:8932/sse
 onboarding:
   seen:
     busy_input_prompt: true
