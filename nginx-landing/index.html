@@ -935,7 +935,7 @@
       color: var(--text-on-dark-muted);
       background: color-mix(in oklch, var(--surface) 7%, transparent);
       border: 1px solid color-mix(in oklch, var(--surface) 12%, transparent);
-      padding: 3px 12px 5px;
+      padding: 4px 12px;
       border-radius: 100px;
       letter-spacing: 0.03em;
       line-height: 1;
@@ -1467,6 +1467,59 @@
       line-height: 1.65;
     }
 
+    /* ── Back to top ── */
+    .back-to-top {
+      position: fixed;
+      bottom: 92px;
+      right: 32px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--fg);
+      color: var(--surface);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.3s var(--ease-out), transform 0.3s var(--ease-out), background 0.2s;
+      pointer-events: none;
+      z-index: 40;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+    }
+
+    .back-to-top.visible {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .back-to-top:hover {
+      background: var(--fg);
+      color: var(--accent);
+    }
+
+    .back-to-top svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+    }
+
+    @media (max-width: 768px) {
+      .back-to-top {
+        bottom: 80px;
+        right: 20px;
+        width: 40px;
+        height: 40px;
+      }
+    }
+
     /* Carousel dots — shown only on mobile (see media query) */
     .carousel-dots {
       display: none;
@@ -1480,22 +1533,27 @@
       bottom: 28px;
       right: 28px;
       z-index: 90;
-      width: 56px;
-      height: 56px;
+      width: 52px;
+      height: 52px;
       border-radius: 50%;
-      background: var(--text-primary);
+      background: var(--fg);
       color: var(--surface);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: var(--font-mono);
-      font-size: 0.78rem;
-      font-weight: 700;
-      box-shadow: none;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
       transition: all 0.3s var(--ease-out);
       opacity: 0;
       transform: translateY(20px) scale(0.8);
       pointer-events: none;
+    }
+
+    .floating-cta svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+      stroke: none;
+      transform: translateX(1.5px);
     }
 
     .floating-cta.visible {
@@ -1506,9 +1564,9 @@
 
     .floating-cta:hover {
       background: var(--fg);
-      color: var(--surface);
+      color: var(--accent);
       transform: translateY(-3px) scale(1.05);
-      box-shadow: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.24);
     }
 
     /* ============================================
@@ -1531,8 +1589,8 @@
       .floating-cta {
         bottom: 20px;
         right: 20px;
-        width: 52px;
-        height: 52px;
+        width: 48px;
+        height: 48px;
       }
 
       /* Mobile menu hamburger toggle button */
@@ -1896,11 +1954,11 @@
           </div>
           <div>
             <dt>Формат</dt>
-            <dd>полный цикл: от постановки задачи до готового сервиса и&nbsp;поддержки в&nbsp;продакшене</dd>
+            <dd>Полный цикл: от постановки задачи до готового сервиса и&nbsp;поддержки в&nbsp;продакшене</dd>
           </div>
           <div>
             <dt>Сильная сторона</dt>
-            <dd>стык разработки, тестирования, ИИ и инфраструктуры</dd>
+            <dd>Стык разработки, тестирования, ИИ и инфраструктуры</dd>
           </div>
         </dl>
         <div class="hero-terminal">
@@ -2278,7 +2336,7 @@
       </div>
 
       <div class="contact-links reveal reveal-delay-1">
-        <a href="https://t.me/Gigglin" target="_blank" rel="noopener" class="contact-link" id="contact-telegram">
+        <a href="https://t.me/i_iakimkin" target="_blank" rel="noopener" class="contact-link" id="contact-telegram">
           <span class="contact-link-code">TG</span>
           Telegram
         </a>
@@ -2303,9 +2361,11 @@
   </footer>
 
   <!-- ══════════════ Floating Telegram CTA ══════════════ -->
-  <a href="https://t.me/Gigglin" target="_blank" rel="noopener" class="floating-cta" id="floating-cta"
+  <a href="https://t.me/i_iakimkin" target="_blank" rel="noopener" class="floating-cta" id="floating-cta"
     aria-label="Написать в Telegram">
-    TG
+    <svg viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3.478 2.405a.75.75 0 0 0-.926.94l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.405z"/>
+    </svg>
   </a>
   <script>
     /* ============================================
@@ -2420,8 +2480,25 @@
       setupCarousel(document.querySelector('.process-grid'), '.process-step');
       setupCarousel(document.querySelector('.projects-scroller'), '.project-card');
       setupCarousel(document.querySelector('.capabilities-grid'), '.capability-card');
+
+      // ── Back to top ──
+      const backToTop = document.getElementById('back-to-top');
+      if (backToTop) {
+        window.addEventListener('scroll', () => {
+          backToTop.classList.toggle('visible', window.scrollY > window.innerHeight);
+        }, { passive: true });
+        backToTop.addEventListener('click', () => {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+      }
     });
   </script>
+
+  <button class="back-to-top" id="back-to-top" aria-label="Наверх">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <polyline points="18 15 12 9 6 15" />
+    </svg>
+  </button>
 </body>
 
 </html>
