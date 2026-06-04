@@ -6,7 +6,7 @@ This repository contains the configuration, deployment scripts, and docker-compo
 - **Base OS**: Ubuntu (VPS / Local Mini PC)
 - **Container Runtimes**: Docker (Portainer/Native) & K3s (Lightweight Kubernetes)
 - **Ingress & Proxy**: [Nginx Proxy Manager](https://nginxproxymanager.com/) running via docker in the root directory. Handles SSL termination and subdomains.
-- **Landing Page**: Custom nginx-based landing page running alongside NPM.
+- **Landing Page**: Custom nginx-based personal portfolio website running alongside NPM (integrated as a Git submodule at `portfolio/`).
 
 ### 🚀 Quick Start
 1. **Basic Host Setup**: Configure your Ubuntu server environment and firewall limits.
@@ -24,6 +24,10 @@ Personal AI assistant framework with persistent memory, multi-agent orchestratio
 - **Location**: [`openclaw/`](./openclaw)
 - **Deployment**: `cd openclaw && docker compose up -d`
 
+### Hermes (AI Agents)
+Specialized AI agents including `hermes-qa` for QA automation and `hermes-finanalyst` for financial research.
+- **Location**: [`hermes/`](./hermes)
+
 ### LibreChat
 An enterprise-grade, unified web interface for interacting with various LLM providers.
 - **Location**: [`librechat/`](./librechat)
@@ -32,17 +36,25 @@ An enterprise-grade, unified web interface for interacting with various LLM prov
 API routing proxy and load balancer to manage, monitor, and route inference LLM requests (used seamlessly by OpenClaw).
 - **Location**: [`omniroute/`](./omniroute)
 
+### AI Presentation & Testcase Generators
+- **AI Presentation**: Web service for generating presentation materials via AI. Location: [`ai-presentation/`](./ai-presentation)
+- **AI Testcase Generator**: Service to automatically generate test cases using LLMs. Location: [`ai-testcase-generator/`](./ai-testcase-generator)
+
 ---
 
-## 🛡️ Privacy, Proxy & VPN
+## 🛡️ Privacy, Proxy, VPN & Remote Access
 
 ### Marzneshin (Xray Proxy)
 Advanced VPN and proxy management interface using the Xray core. Handles secure access workflows.
 - **Location**: [`marzneshin/`](./marzneshin)
 
+### Apache Guacamole
+Clientless remote desktop gateway supporting standard protocols like VNC, RDP, and SSH.
+- **Location**: [`guacamole/`](./guacamole)
+
 ---
 
-## ☁️ Cloud & Synchronization
+## ☁️ Cloud, Synchronization & Dashboards
 
 ### Nextcloud
 Self-hosted platform for comprehensive file storage, calendar, and contacts synchronization. Includes Talk integration.
@@ -51,6 +63,10 @@ Self-hosted platform for comprehensive file storage, calendar, and contacts sync
 ### Syncthing
 Decentralized, continuous file synchronization service operating smoothly across devices.
 - **Location**: [`syncthing/`](./syncthing)
+
+### Life Dashboard
+Personal dashboard for metric tracking and analytics visualization.
+- **Location**: [`life-dashboard/`](./life-dashboard)
 
 ---
 
@@ -64,17 +80,22 @@ A complete federated Matrix messaging stack with built-in VoIP via LiveKit. Depl
 ---
 
 ## 📂 Full Directory Structure
+- `_archive/` - Archived templates and legacy files.
+- `ai-presentation/` - Service for generating presentations using AI.
+- `ai-testcase-generator/` - Automatic software testcase generator.
+- `backup/` - Tools or scripts associated with taking system backups.
 - `dashboard/` - Minimal start dashboard configuration.
+- `guacamole/` - Apache Guacamole remote desktop gateway.
+- `hermes/` - Hermes QA and Financial AI agents.
 - `infrastructure/` - Core host and K3s installation scripts.
 - `librechat/` - Chat UI for local and remote LLMs.
+- `life-dashboard/` - Personal dashboard for tracking and analytics.
 - `livekit-config/` - Custom configuration sets for LiveKit services.
 - `marzneshin/` - Xray proxy panel configuration.
 - `matrix/` - Complete Matrix deployment scripts for K3s.
 - `nextcloud/` - Nextcloud deployment files.
-- `nginx-landing/` - Source for the web landing page (starts via root docker-compose).
 - `omniroute/` - Setup for LLM proxy routing.
 - `openclaw/` - The OpenClaw AI Multi-Agent architecture.
+- `portfolio/` - Personal portfolio landing page (integrated as a Git submodule).
 - `scripts/` - Maintenance and utility bash scripts.
 - `syncthing/` - File synchronization component.
-- `_archive/` - Archived templates and legacy files.
-- `backup/` - Tools or scripts associated with taking system backups.

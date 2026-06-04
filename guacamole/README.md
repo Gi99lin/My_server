@@ -10,7 +10,7 @@ Mac (browser)
    ↓  SSH tunnel  -L 8080:127.0.0.1:8080
 homelab:8080 → guacamole (Tomcat)
                   ↓
-               guacd (1.5.5) ── RDP ──→ 192.168.122.x:3389 (Win10 VM)
+               guacd (1.5.5) ── VNC (UltraVNC) ──→ 192.168.122.x:5900 (Win10 VM)
                   ↓
                postgres:15 (connection metadata, users)
 ```
@@ -37,7 +37,7 @@ Re-running is safe: it skips already-completed steps and does not wipe `pgdata/`
 
 ### Why the FORWARD rules?
 
-Guacamole's `guacd` container connects to the Win10 VM at `192.168.122.179:3389`.
+Guacamole's `guacd` container connects to the Win10 VM.
 Docker and libvirt live on separate bridges; the default `FORWARD` chain does
 not bridge them and `guacd` gets `Connection refused`. The two ACCEPT rules
 allow that specific subnet-to-subnet path (not the whole world).
@@ -60,10 +60,23 @@ top-right menu → Settings → Preferences.
 
 ## Adding a connection (Win10 VM)
 
+The primary connection uses **VNC (UltraVNC)** on port 5900, which natively prevents session-drop and VPN disconnect issues. **RDP** can still be configured as a fallback.
+
+### Primary: VNC (UltraVNC)
+
+Settings → Connections → New Connection:
+
+- Protocol: `VNC`
+- Hostname: `192.168.122.X` (from `sudo virsh domifaddr win10` on the host)
+- Port: `5900`
+- Password: VNC access password (configured in UltraVNC inside the VM)
+
+### Fallback: RDP
+
 Settings → Connections → New Connection:
 
 - Protocol: `RDP`
-- Hostname: `192.168.122.X` (from `sudo virsh domifaddr win10` on the host)
+- Hostname: `192.168.122.X`
 - Port: `3389`
 - Username / Password: Windows local account
 - Ignore server certificate: ✓

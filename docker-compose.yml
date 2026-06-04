@@ -43,7 +43,7 @@ services:
   # ==================== Landing Page ====================
   landing:
     build:
-      context: ./nginx-landing
+      context: ./portfolio
       dockerfile: Dockerfile
     image: vps-server-landing
     container_name: landing
