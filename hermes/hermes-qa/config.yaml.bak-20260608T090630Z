@@ -1,0 +1,47 @@
+model:
+  default: cx/gpt-5.5-high
+  provider: custom
+  base_url: http://spawn-sanitizer:18780/v1
+agent:
+  max_turns: 60
+  auto_compact: true
+compression:
+  threshold: 0.5
+terminal:
+  backend: local
+  timeout: 1200
+  allowed_commands: all
+delegation:
+  max_iterations: 50
+  max_spawn_depth: 2
+  max_concurrent_children: 3
+  timeout: 1200
+  subagent_auto_approve: false
+  inherit_mcp_toolsets: true
+code_execution:
+  timeout: 1200
+  max_tool_calls: 50
+display:
+  compact: false
+  tool_progress: all
+  streaming: true
+  skin: slate
+model_aliases:
+  gemini:
+    model: cx/gpt-5.5-high
+    provider: custom
+    base_url: http://spawn-sanitizer:18780/v1
+mcp_servers:
+  playwright:
+    command: npx
+    args:
+    - -y
+    - '@playwright/mcp@latest'
+    - --cdp-endpoint
+    - ws://browserless:3000
+  telegram:
+    url: http://telegram-mcp:8932/sse
+    transport: sse
+onboarding:
+  seen:
+    busy_input_prompt: true
