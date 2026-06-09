@@ -1,7 +1,13 @@
 model:
-  default: minimax/MiniMax-M3
-  provider: custom
-  base_url: http://spawn-sanitizer:18780/v1
+  default: deepseek-v4-flash
+  provider: custom:bothub
+
+custom_providers:
+  - name: bothub
+    base_url: https://openai.bothub.chat/v1
+    key_env: BOTHUB_API_KEY
+    api_mode: chat_completions
+
 providers: {}
 fallback_providers: []
 credential_pool_strategies: {}
@@ -515,9 +521,8 @@ paste_collapse_char_threshold: 2000
 _config_version: 28
 model_aliases:
   gemini:
-    model: minimax/MiniMax-M3
-    provider: custom
-    base_url: http://spawn-sanitizer:18780/v1
+    model: deepseek-v4-flash
+    provider: custom:bothub
 mcp_servers:
   playwright:
     command: npx

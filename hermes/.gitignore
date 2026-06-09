@@ -18,6 +18,7 @@ hermes-*/sessions/
 hermes-*/cron/
 hermes-*/.local/
 hermes-*/.npm/
+hermes-*/.playwright-mcp/
 
 # Bundled skills (downloaded at container start, not our code)
 hermes-*/skills/.bundled_manifest

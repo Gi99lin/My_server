@@ -89,6 +89,7 @@ ai-testcase-generator/*.tar.gz
 
 # Hermes QA Synced Data
 hermes/hermes-qa/.cache/
+hermes/hermes-qa/.playwright-mcp/
 hermes/hermes-qa/home/
 hermes/hermes-qa/hooks/
 hermes/hermes-qa/logs/
