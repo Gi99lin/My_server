@@ -1,18 +1,11 @@
 model:
-  default: deepseek-v4-flash
+  default: minimax-m2.7
   provider: custom:bothub
-
-custom_providers:
-  - name: bothub
-    base_url: https://openai.bothub.chat/v1
-    key_env: BOTHUB_API_KEY
-    api_mode: chat_completions
-
 providers: {}
 fallback_providers: []
 credential_pool_strategies: {}
 toolsets:
-  - hermes-cli
+- hermes-cli
 agent:
   max_turns: 60
   gateway_timeout: 1800
@@ -248,9 +241,9 @@ display:
   runtime_footer:
     enabled: false
     fields:
-      - model
-      - context_pct
-      - cwd
+    - model
+    - context_pct
+    - cwd
   copy_shortcut: auto
   tool_progress: all
 dashboard:
@@ -391,11 +384,11 @@ discord:
     speech_gain: 1.0
     ack_enabled: true
     ack_phrases:
-      - Let me look into that.
-      - One moment.
-      - Checking on that now.
-      - Give me a sec.
-      - On it.
+    - Let me look into that.
+    - One moment.
+    - Checking on that now.
+    - Give me a sec.
+    - On it.
 whatsapp: {}
 telegram:
   reactions: false
@@ -416,7 +409,8 @@ approvals:
   cron_mode: deny
   mcp_reload_confirm: true
   destructive_slash_confirm: false
-command_allowlist: []
+command_allowlist:
+- script execution via -e/-c flag
 quick_commands: {}
 hooks: {}
 hooks_auto_accept: false
@@ -436,7 +430,7 @@ security:
   allow_lazy_installs: true
 cron:
   wrap_response: true
-  max_parallel_jobs:
+  max_parallel_jobs: null
 kanban:
   dispatch_in_gateway: true
   dispatch_interval_seconds: 60
@@ -445,7 +439,7 @@ kanban:
   worker_log_backup_count: 1
   orchestrator_profile: ''
   default_assignee: ''
-  max_in_progress_per_profile:
+  max_in_progress_per_profile: null
   auto_decompose: true
   auto_decompose_per_tick: 3
   dispatch_stale_timeout_seconds: 14400
@@ -480,7 +474,7 @@ streaming:
   transport: auto
   edit_interval: 0.8
   buffer_threshold: 24
-  cursor: " ▉"
+  cursor: " \u2589"
   fresh_final_after_seconds: 60.0
 sessions:
   auto_prune: false
@@ -519,18 +513,23 @@ paste_collapse_threshold: 5
 paste_collapse_threshold_fallback: 5
 paste_collapse_char_threshold: 2000
 _config_version: 28
+custom_providers:
+- name: bothub
+  base_url: https://openai.bothub.chat/v1
+  key_env: BOTHUB_API_KEY
+  api_mode: chat_completions
 model_aliases:
   gemini:
-    model: deepseek-v4-flash
+    model: minimax-m2.7
     provider: custom:bothub
 mcp_servers:
   playwright:
     command: npx
     args:
-      - -y
-      - '@playwright/mcp@latest'
-      - --cdp-endpoint
-      - ws://browserless:3000
+    - -y
+    - '@playwright/mcp@latest'
+    - --cdp-endpoint
+    - ws://browserless:3000
   telegram:
     url: http://telegram-mcp:8932/sse
     transport: sse

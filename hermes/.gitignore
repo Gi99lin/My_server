@@ -6,6 +6,7 @@
 hermes-*/gateway.lock
 hermes-*/gateway.pid
 hermes-*/gateway_state.json
+hermes-*/auth.json
 hermes-*/auth.lock
 hermes-*/channel_directory.json
 hermes-*/.clean_shutdown
@@ -19,6 +20,10 @@ hermes-*/cron/
 hermes-*/.local/
 hermes-*/.npm/
 hermes-*/.playwright-mcp/
+
+# QA evidence dumps generated during browser/test runs
+hermes-*/*.png
+hermes-*/batch*
 
 # Bundled skills (downloaded at container start, not our code)
 hermes-*/skills/.bundled_manifest
