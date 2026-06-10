@@ -4,6 +4,8 @@ services:
     image: ghcr.io/gi99lin/life-dashboard-frontend:latest
     container_name: life-dashboard
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
     depends_on:
       - life-dashboard-api
     ports:
@@ -17,6 +19,8 @@ services:
     image: ghcr.io/gi99lin/life-dashboard-api:latest
     container_name: life-dashboard-api
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
     environment:
       - PORT=3001
       - VAULT_PATH=/vault
@@ -38,6 +42,8 @@ services:
     image: ghcr.io/gi99lin/life-dashboard-collector:latest
     container_name: life-dashboard-collector
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
     environment:
       - METRICS_PATH=/data/metrics.json
       - GARMIN_EMAIL=${GARMIN_EMAIL}

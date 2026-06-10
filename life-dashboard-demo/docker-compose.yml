@@ -1,0 +1,18 @@
+services:
+  # ==================== Life Dashboard — public demo ====================
+  # Fake data baked in at build time (VITE_DEMO=1): no API, no collector,
+  # no socket, no password. Served behind NPM at demo.gigglin.tech.
+  life-dashboard-demo:
+    image: ghcr.io/gi99lin/life-dashboard-frontend-demo:latest
+    container_name: life-dashboard-demo
+    restart: unless-stopped
+    pull_policy: always
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+    networks:
+      - proxy_network
+
+networks:
+  proxy_network:
+    external: true
+    name: my_server_proxy_network

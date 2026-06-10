@@ -1,0 +1,22 @@
+services:
+  # ==================== Status Dashboard — public demo ====================
+  # The "stack.map" infra board with fake topology baked in (VITE_DEMO=1):
+  # no backend, no Docker socket, no password, CI/CD section disabled.
+  # Served behind NPM at infra.gigglin.tech.
+  #
+  # The REAL status board (live Docker data) is NOT deployed here — it is
+  # private and only embedded inside the prod dashboard. See DEPLOY.md (Phase B).
+  status-dashboard-demo:
+    image: ghcr.io/gi99lin/status-dashboard-web-demo:latest
+    container_name: status-dashboard-demo
+    restart: unless-stopped
+    pull_policy: always
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+    networks:
+      - proxy_network
+
+networks:
+  proxy_network:
+    external: true
+    name: my_server_proxy_network

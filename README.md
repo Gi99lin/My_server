@@ -15,6 +15,29 @@ This repository contains the configuration, deployment scripts, and docker-compo
 
 *(For detailed local Matrix deployment and K3s instructions, see [LOCAL_DEPLOY.md](./LOCAL_DEPLOY.md))*
 
+### 🔄 Auto-deploy (Watchtower)
+[`watchtower/`](./watchtower) runs [Watchtower](https://containrrr.dev/watchtower/), which polls GHCR every
+2 minutes and restarts any container labelled `com.centurylinklabs.watchtower.enable=true` when a newer
+`:latest` image is published. With it running, **a `git push` is the whole deploy** — GitHub Actions builds and
+pushes the image, Watchtower picks it up. Unlabeled containers (NPM, its DB) are never touched.
+
+```bash
+docker login ghcr.io -u Gi99lin   # once, so Watchtower can pull private images
+cd watchtower && docker compose up -d
+```
+
+### 🌐 Public demos (no password, fake data)
+Portfolio-facing demos of the dashboards, safe to expose publicly — they ship canned data and have no backend:
+- [`life-dashboard-demo/`](./life-dashboard-demo) → `demo.gigglin.tech`
+- [`status-dashboard-demo/`](./status-dashboard-demo) → `infra.gigglin.tech`
+
+```bash
+cd life-dashboard-demo && docker compose up -d
+cd ../status-dashboard-demo && docker compose up -d
+```
+Then add the matching Proxy Hosts in NPM. Full runbook (DNS, NPM, phases) lives in the
+`status_dashboard` repo at `docs/DEPLOY.md`.
+
 ---
 
 ## 🤖 AI & LLM Ecosystem

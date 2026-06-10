@@ -1,0 +1,24 @@
+services:
+  # ==================== Watchtower — auto-deploy ====================
+  # Polls GHCR every 2 minutes and restarts any container labelled
+  #   com.centurylinklabs.watchtower.enable=true
+  # whose image has a newer :latest. After the first `up -d`, a git push
+  # (which builds + pushes via GitHub Actions) is the whole deploy.
+  #
+  # Only LABEL-enabled containers are touched, so NPM, its DB, and anything
+  # unlabeled are never auto-updated.
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    restart: unless-stopped
+    environment:
+      - WATCHTOWER_CLEANUP=true          # remove old images after update
+      - WATCHTOWER_LABEL_ENABLE=true     # only update opted-in containers
+      - WATCHTOWER_POLL_INTERVAL=120     # seconds between GHCR checks
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - TZ=Europe/Moscow
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # GHCR credentials for pulling private images. Created on the host by:
+      #   docker login ghcr.io -u Gi99lin -p <GHCR_PAT_with_read:packages>
+      - /root/.docker/config.json:/config.json:ro

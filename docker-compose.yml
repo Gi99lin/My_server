@@ -45,6 +45,9 @@ services:
     image: ghcr.io/gi99lin/portfolio:latest
     container_name: landing
     restart: unless-stopped
+    pull_policy: always
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
     networks:
       - proxy_network
 
