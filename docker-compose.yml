@@ -42,10 +42,7 @@ services:
 
   # ==================== Landing Page ====================
   landing:
-    build:
-      context: ./portfolio
-      dockerfile: Dockerfile
-    image: vps-server-landing
+    image: ghcr.io/gi99lin/portfolio:latest
     container_name: landing
     restart: unless-stopped
     networks:

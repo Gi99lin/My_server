@@ -6,7 +6,7 @@ This repository contains the configuration, deployment scripts, and docker-compo
 - **Base OS**: Ubuntu (VPS / Local Mini PC)
 - **Container Runtimes**: Docker (Portainer/Native) & K3s (Lightweight Kubernetes)
 - **Ingress & Proxy**: [Nginx Proxy Manager](https://nginxproxymanager.com/) running via docker in the root directory. Handles SSL termination and subdomains.
-- **Landing Page**: Custom nginx-based personal portfolio website running alongside NPM (integrated as a Git submodule at `portfolio/`).
+- **Landing Page**: Custom nginx-based personal portfolio website running alongside NPM from the prebuilt `ghcr.io/gi99lin/portfolio:latest` image.
 
 ### 🚀 Quick Start
 1. **Basic Host Setup**: Configure your Ubuntu server environment and firewall limits.
@@ -96,6 +96,6 @@ A complete federated Matrix messaging stack with built-in VoIP via LiveKit. Depl
 - `nextcloud/` - Nextcloud deployment files.
 - `omniroute/` - Setup for LLM proxy routing.
 - `openclaw/` - The OpenClaw AI Multi-Agent architecture.
-- `portfolio/` - Personal portfolio landing page (integrated as a Git submodule).
+- Portfolio landing page - deployed from `ghcr.io/gi99lin/portfolio:latest`; source lives in the separate `portfolio` repository.
 - `scripts/` - Maintenance and utility bash scripts.
 - `syncthing/` - File synchronization component.
