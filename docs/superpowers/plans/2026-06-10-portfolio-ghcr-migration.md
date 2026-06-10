@@ -28,6 +28,7 @@
 ### Task 1: Add Portfolio GHCR Workflow
 
 **Files:**
+- Create: `/Users/ivanakimkin/Projects/portfolio/.dockerignore`
 - Create: `/Users/ivanakimkin/Projects/portfolio/.github/workflows/docker-publish.yml`
 
 - [ ] **Step 1: Verify current missing workflow state**
@@ -48,7 +49,28 @@ Run:
 mkdir -p /Users/ivanakimkin/Projects/portfolio/.github/workflows
 ```
 
-- [ ] **Step 3: Add the workflow file**
+- [ ] **Step 3: Add the Docker ignore file**
+
+Create `/Users/ivanakimkin/Projects/portfolio/.dockerignore` with:
+
+```text
+.git
+.github
+.claude
+.gemini
+.dockerignore
+.gitignore
+Dockerfile
+open-design
+*.png
+*.jpg
+*.jpeg
+*.webp
+*Screenshot*
+*Снимок-экрана*
+```
+
+- [ ] **Step 4: Add the workflow file**
 
 Create `/Users/ivanakimkin/Projects/portfolio/.github/workflows/docker-publish.yml` with:
 
@@ -108,7 +130,7 @@ jobs:
           exit 1
 ```
 
-- [ ] **Step 4: Verify workflow file exists**
+- [ ] **Step 5: Verify workflow file exists**
 
 Run:
 
@@ -118,7 +140,7 @@ test -f /Users/ivanakimkin/Projects/portfolio/.github/workflows/docker-publish.y
 
 Expected: PASS with exit code `0`.
 
-- [ ] **Step 5: Build the portfolio image locally**
+- [ ] **Step 6: Build the portfolio image locally**
 
 Run:
 
@@ -128,7 +150,7 @@ cd /Users/ivanakimkin/Projects/portfolio && docker build -t ghcr.io/gi99lin/port
 
 Expected: PASS with exit code `0`.
 
-- [ ] **Step 6: Smoke test the local image**
+- [ ] **Step 7: Smoke test the local image**
 
 Run:
 
@@ -138,17 +160,17 @@ docker run --rm --entrypoint nginx ghcr.io/gi99lin/portfolio:latest -t
 
 Expected: PASS with nginx reporting configuration syntax is ok and test is successful.
 
-- [ ] **Step 7: Commit the workflow in `portfolio`**
+- [ ] **Step 8: Commit the workflow in `portfolio`**
 
 Run:
 
 ```sh
 cd /Users/ivanakimkin/Projects/portfolio
-git add .github/workflows/docker-publish.yml
+git add .dockerignore .github/workflows/docker-publish.yml
 git commit -m "ci: publish portfolio docker image"
 ```
 
-Expected: commit succeeds and includes only the workflow file.
+Expected: commit succeeds and includes only `.dockerignore` and the workflow file.
 
 ---
 
@@ -443,4 +465,3 @@ git commit -m "chore: deploy portfolio from ghcr image"
 ```
 
 Expected: commit succeeds without including unrelated `hermes/hermes-qa/*` changes.
-
