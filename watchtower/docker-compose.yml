@@ -19,6 +19,8 @@ services:
       - TZ=Europe/Moscow
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # GHCR credentials for pulling private images. Created on the host by:
-      #   docker login ghcr.io -u Gi99lin -p <GHCR_PAT_with_read:packages>
-      - /root/.docker/config.json:/config.json:ro
+      # GHCR credentials for pulling private images. GHCR does NOT accept your
+      # GitHub password — log in with a Personal Access Token (read:packages):
+      #   echo <PAT> | docker login ghcr.io -u Gi99lin --password-stdin
+      # That writes the creds to the gigglin user's docker config, mounted here:
+      - /home/gigglin/.docker/config.json:/config.json:ro
