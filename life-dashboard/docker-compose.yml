@@ -27,6 +27,9 @@ services:
       - METRICS_PATH=/data/metrics.json
       - TZ=Europe/Moscow
       - DASHBOARD_PASS=${DASHBOARD_PASS}
+      # Shared with status-dashboard-api so the embedded <status-map> is
+      # authorised by the same login cookie (and sessions survive restarts).
+      - SESSION_SECRET=${SESSION_SECRET}
     volumes:
       - dashboard_data:/data
       # Obsidian vault (synced via Syncthing)

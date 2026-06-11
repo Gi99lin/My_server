@@ -1,0 +1,34 @@
+services:
+  # ==================== Status Dashboard — API (Phase B) ====================
+  # Private backend for the REAL status map embedded in the prod dashboard.
+  # NOT publicly routed: NPM exposes only dash.gigglin.tech/stack/api/* -> here,
+  # and this API enforces the SAME cookie as life-dashboard-api (shared
+  # DASHBOARD_PASS + SESSION_SECRET), so /stack/api is owner-only.
+  #
+  # The <status-map> JS bundle itself ships inside the life-dashboard image, so
+  # no status-web container is needed here.
+  status-dashboard-api:
+    image: ghcr.io/gi99lin/status-dashboard-api:latest
+    container_name: status-dashboard-api
+    restart: unless-stopped
+    pull_policy: always
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+    environment:
+      - PORT=3002
+      - HOST_DISPLAY_NAME=gigglin-server
+      - DASHBOARD_PASS=${DASHBOARD_PASS}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - NETDATA_URL=${NETDATA_URL:-http://172.17.0.1:19999}
+      - PULSE_INTERVAL_MS=5000
+      - TZ=Europe/Moscow
+    volumes:
+      # Read container stats / networks
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - proxy_network
+
+networks:
+  proxy_network:
+    external: true
+    name: my_server_proxy_network
