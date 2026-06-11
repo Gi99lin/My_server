@@ -24,6 +24,7 @@ services:
       - NETDATA_URL=${NETDATA_URL:-http://172.17.0.1:19999}
       - PULSE_INTERVAL_MS=5000
       - TZ=Europe/Moscow
+      - VM_NAME=work-vm
     volumes:
       # Read container stats / networks
       - /var/run/docker.sock:/var/run/docker.sock:ro

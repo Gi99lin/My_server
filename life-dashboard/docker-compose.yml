@@ -38,6 +38,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - life_dashboard_network
+      - proxy_network
 
   # ==================== Life Dashboard — Collector ====================
   # Cron-based: fetches Garmin, weather, git every 2 hours
