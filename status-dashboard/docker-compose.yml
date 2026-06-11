@@ -14,11 +14,13 @@ services:
     pull_policy: always
     labels:
       - com.centurylinklabs.watchtower.enable=true
+    # REQUIRES a .env in THIS folder (see .env.example). Without DASHBOARD_PASS
+    # the API runs open and /stack/api leaks topology — never deploy without it.
     environment:
       - PORT=3002
       - HOST_DISPLAY_NAME=gigglin-server
-      - DASHBOARD_PASS=${DASHBOARD_PASS}
-      - SESSION_SECRET=${SESSION_SECRET}
+      - DASHBOARD_PASS=${DASHBOARD_PASS:?set DASHBOARD_PASS in status-dashboard/.env}
+      - SESSION_SECRET=${SESSION_SECRET:?set SESSION_SECRET in status-dashboard/.env}
       - NETDATA_URL=${NETDATA_URL:-http://172.17.0.1:19999}
       - PULSE_INTERVAL_MS=5000
       - TZ=Europe/Moscow
