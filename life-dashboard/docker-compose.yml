@@ -23,6 +23,7 @@ services:
       - com.centurylinklabs.watchtower.enable=true
     environment:
       - PORT=3001
+      - WEATHER_PROXY=${WEATHER_PROXY}
       - VAULT_PATH=/vault
       - METRICS_PATH=/data/metrics.json
       - TZ=Europe/Moscow
@@ -54,6 +55,7 @@ services:
       - GARMIN_PASSWORD=${GARMIN_PASSWORD}
       - WEATHER_LAT=55.7558
       - WEATHER_LON=37.6173
+      - WEATHER_PROXY=${WEATHER_PROXY}
       - GIT_REPOS_PATH=/repos
       - TZ=Europe/Moscow
     volumes:
