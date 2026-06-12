@@ -25,9 +25,12 @@ services:
       - PULSE_INTERVAL_MS=5000
       - TZ=Europe/Moscow
       - VM_NAME=work-vm
+      - NGINX_CONF_PATH=/npm-data/nginx/proxy_host
     volumes:
       # Read container stats / networks
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # NPM proxy-host configs (read-only) -> public URL routing
+      - npm-data:/npm-data:ro
     networks:
       - proxy_network
 
@@ -35,3 +38,8 @@ networks:
   proxy_network:
     external: true
     name: my_server_proxy_network
+
+volumes:
+  npm-data:
+    external: true
+    name: my_server_vps-server_nginx-data
