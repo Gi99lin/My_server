@@ -1,0 +1,47 @@
+# ═══════════════════════════════════════════════════════════════
+# Hermes Mission Control (tasks) — CLI Configuration
+# ═══════════════════════════════════════════════════════════════
+
+# Model — all requests go through OmniRoute (spawn-sanitizer)
+model:
+  default: "cx/gpt-5.5-high"
+  provider: "custom"
+  base_url: "http://spawn-sanitizer:18780/v1"
+  # api_key comes from OPENAI_API_KEY in .env
+
+# ── Agent Behavior ──────────────────────────────────────────
+agent:
+  max_turns: 60
+  auto_compact: true
+
+# ── Context Compression ────────────────────────────────────
+compression:
+  threshold: 0.50
+
+# ── Terminal Access ─────────────────────────────────────────
+# Needed for scripts/yt.py (YouTrack CLI)
+terminal:
+  backend: local
+  timeout: 120
+  allowed_commands: "all"
+
+# ── Sub-Agent Delegation ──────────────────────────────────
+# Used only by agent-executor mode (research / draft subtasks)
+delegation:
+  max_iterations: 40
+  max_spawn_depth: 1
+  max_concurrent_children: 3
+  subagent_auto_approve: false
+  inherit_mcp_toolsets: true
+
+# ── Code Execution Sandbox ────────────────────────────────
+code_execution:
+  timeout: 120
+  max_tool_calls: 30
+
+# ── Display ───────────────────────────────────────────────
+display:
+  compact: true
+  tool_progress: errors
+  streaming: true
+  skin: default

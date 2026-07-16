@@ -1,0 +1,6 @@
+# YouTrack runtime data (lives on the server, never in git)
+data/
+conf/
+logs/
+backups/
+.env

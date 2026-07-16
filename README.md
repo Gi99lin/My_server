@@ -48,8 +48,13 @@ Personal AI assistant framework with persistent memory, multi-agent orchestratio
 - **Deployment**: `cd openclaw && docker compose up -d`
 
 ### Hermes (AI Agents)
-Specialized AI agents including `hermes-qa` for QA automation and `hermes-finanalyst` for financial research.
-- **Location**: [`hermes/`](./hermes)
+Specialized AI agents including `hermes-qa` for QA automation, `hermes-finanalyst` for financial research, and `hermes-tasks` — the Mission Control personal task agent (Telegram intake → decomposition → YouTrack, daily digests, weekly review).
+- **Location**: [`hermes/`](./hermes) • Runbook: [`hermes/hermes-tasks/SETUP.md`](./hermes/hermes-tasks/SETUP.md)
+
+### YouTrack (Task Tracker)
+Self-hosted YouTrack Server — the task database behind `hermes-tasks`. Includes the "Mission Control" preset bootstrap (projects, fields, board, seed import from Obsidian).
+- **Location**: [`youtrack/`](./youtrack)
+- **Deployment**: `cd youtrack && ./install.sh`
 
 ### LibreChat
 An enterprise-grade, unified web interface for interacting with various LLM providers.

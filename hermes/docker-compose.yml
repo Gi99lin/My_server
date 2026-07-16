@@ -45,6 +45,31 @@ services:
       - proxy_network
     mem_limit: 2g
 
+  hermes-tasks:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-tasks
+    restart: unless-stopped
+    volumes:
+      - ./hermes-tasks:/opt/data
+    env_file:
+      - .env
+    environment:
+      - HERMES_GATEWAY_PORT=19702
+      - HERMES_DASHBOARD=1
+      - HERMES_DASHBOARD_PORT=9121
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN_TASKS}
+      - TELEGRAM_PROXY=${TELEGRAM_PROXY}
+      - YOUTRACK_URL=${YOUTRACK_URL:-http://youtrack:8080}
+      - YOUTRACK_TOKEN=${YOUTRACK_TOKEN}
+      - no_proxy=spawn-sanitizer,youtrack,localhost,127.0.0.1
+    ports:
+      - "19702:19702"
+      - "127.0.0.1:9121:9121"
+    command: ["gateway", "run"]
+    networks:
+      - proxy_network
+    mem_limit: 2g
+
 networks:
   proxy_network:
     external: true

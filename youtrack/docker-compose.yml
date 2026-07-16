@@ -1,0 +1,23 @@
+services:
+  youtrack:
+    image: jetbrains/youtrack:${YT_VERSION:-2026.2.17765}
+    container_name: youtrack
+    restart: unless-stopped
+    volumes:
+      - ./data:/opt/youtrack/data
+      - ./conf:/opt/youtrack/conf
+      - ./logs:/opt/youtrack/logs
+      - ./backups:/opt/youtrack/backups
+    ports:
+      # Host port for the initial Configuration Wizard; NPM proxies via the
+      # shared docker network afterwards (youtrack:8080), so this can be
+      # firewalled or removed once setup is done.
+      - "8899:8080"
+    networks:
+      - proxy_network
+    mem_limit: 3g
+
+networks:
+  proxy_network:
+    external: true
+    name: my_server_proxy_network
