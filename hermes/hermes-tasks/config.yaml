@@ -4,7 +4,7 @@
 
 # Model — all requests go through OmniRoute (spawn-sanitizer)
 model:
-  default: "cx/gpt-5.5-high"
+  default: "cx/gpt-5.6-sol-xhigh"
   provider: "custom"
   base_url: "http://spawn-sanitizer:18780/v1"
   # api_key comes from OPENAI_API_KEY in .env
