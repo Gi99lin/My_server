@@ -11,14 +11,15 @@ chmod +x install.sh && ./install.sh
 
 1. Открой `http://192.168.1.11:8899`, введи wizard token
    (`docker exec youtrack cat /opt/youtrack/conf/internal/services/configurationWizard/wizard_token.txt`).
-2. В визарде: Base URL = `https://tracker.gigglin.tech`, создай админа.
-3. NPM → Proxy Host: `tracker.gigglin.tech` → `youtrack:8080` (http),
+2. В визарде: Base URL = `https://youtrack.gigglin.tech`, создай админа.
+3. NPM → Proxy Host: `youtrack.gigglin.tech` → `youtrack:8080` (http),
    Websockets ON, SSL cert.
 4. Профиль → Account Security → New token (scope YouTrack) → в `youtrack/.env`
-   как `YT_TOKEN`, туда же `YT_URL=https://tracker.gigglin.tech`.
-5. Preset + импорт задач из старых канбанов:
+   как `YT_TOKEN`, туда же `YT_URL=https://youtrack.gigglin.tech`.
+5. Preset + импорт задач из старых канбанов (с сервера публичный домен
+   недоступен — нет NAT loopback, поэтому через локальный порт):
    ```bash
-   python3 bootstrap/bootstrap_youtrack.py
+   YT_URL=http://localhost:8899 python3 bootstrap/bootstrap_youtrack.py
    ```
 6. В UI открой борд **Mission Control**: swimlanes = `Sphere`,
    WIP-лимит колонки In Progress = 3. (API это не умеет, руками 1 минута.)

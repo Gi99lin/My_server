@@ -3,7 +3,7 @@
 Self-hosted YouTrack (free tier: up to 10 users) used as the single task
 database. Tasks are managed by the `hermes-tasks` agent (see
 [`../hermes/hermes-tasks/SETUP.md`](../hermes/hermes-tasks/SETUP.md) for the
-full runbook) and via UI/mobile at `https://tracker.gigglin.tech`.
+full runbook) and via UI/mobile at `https://youtrack.gigglin.tech`.
 
 ## Install
 ```bash
@@ -22,7 +22,9 @@ full runbook) and via UI/mobile at `https://tracker.gigglin.tech`.
 
 ```bash
 # .env: YT_URL + YT_TOKEN (Profile → Account Security → Tokens)
-python3 bootstrap/bootstrap_youtrack.py
+# NB: when running ON the server, use the local port — the router has no
+# NAT loopback, so the public domain times out from inside the network:
+YT_URL=http://localhost:8899 python3 bootstrap/bootstrap_youtrack.py
 ```
 
 ## Notes
@@ -30,4 +32,4 @@ python3 bootstrap/bootstrap_youtrack.py
   YouTrack migrates data on start — make a backup first: Admin → Backup).
 - JVM app, `mem_limit: 3g`. Check free RAM before enabling.
 - Host port `8899` is only needed for the initial wizard; afterwards NPM
-  proxies `tracker.gigglin.tech` → `youtrack:8080` over the shared network.
+  proxies `youtrack.gigglin.tech` → `youtrack:8080` over the shared network.

@@ -79,10 +79,11 @@ def load_dotenv():
             if line.startswith("#") or "=" not in line:
                 continue
             k, v = line.split("=", 1)
+            v = v.strip().strip('"').strip("'")
             if k == "YT_URL" and not YT_URL:
-                YT_URL = v.strip().rstrip("/")
+                YT_URL = v.rstrip("/")
             if k == "YT_TOKEN" and not YT_TOKEN:
-                YT_TOKEN = v.strip()
+                YT_TOKEN = v
 
 
 def api(method, path, body=None, fields=None):
@@ -174,6 +175,32 @@ def attach_field(project, payload, label):
     print(f"    + {project['shortName']}: '{label}' attached")
 
 
+def attach_state(project, state_proto, state_bundle):
+    """Projects created via API get the default State field auto-attached
+    with the stock bundle (Open/Fixed/...). Rebind it to our bundle."""
+    attached = api("GET", f"admin/projects/{project['id']}/customFields",
+                   fields="id,field(id,name),bundle(id,name)")
+    for a in attached:
+        if a["field"]["name"] == "State":
+            if (a.get("bundle") or {}).get("id") == state_bundle["id"]:
+                print(f"    = {project['shortName']}: 'State' uses Mission Control bundle")
+            else:
+                api("POST",
+                    f"admin/projects/{project['id']}/customFields/{a['id']}?fields=id",
+                    {"$type": "StateProjectCustomField",
+                     "bundle": {"id": state_bundle["id"], "$type": "StateBundle"},
+                     "canBeEmpty": False})
+                print(f"    ~ {project['shortName']}: 'State' rebound to Mission Control bundle")
+            return
+    post(f"admin/projects/{project['id']}/customFields", {
+        "$type": "StateProjectCustomField",
+        "field": {"id": state_proto["id"]},
+        "bundle": {"id": state_bundle["id"], "$type": "StateBundle"},
+        "canBeEmpty": False,
+    }, fields="id")
+    print(f"    + {project['shortName']}: 'State' attached")
+
+
 def ensure_tags():
     existing = {t["name"] for t in get("tags", "id,name")}
     for t in TAGS:
@@ -241,6 +268,9 @@ def main():
     if not YT_URL or not YT_TOKEN:
         sys.exit("Set YT_URL and YT_TOKEN (env or youtrack/.env)")
 
+    masked = f"{YT_TOKEN[:8]}…{YT_TOKEN[-4:]}" if len(YT_TOKEN) > 12 else "(too short!)"
+    print(f"Token: {masked}, len {len(YT_TOKEN)}"
+          + ("" if YT_TOKEN.startswith("perm") else "  ⚠ no 'perm' prefix — likely truncated"))
     me = get("users/me", "id,login")
     print(f"Authenticated as {me['login']} at {YT_URL}\n")
 
@@ -260,12 +290,7 @@ def main():
 
     print("Attaching fields to projects:")
     for p in projects:
-        attach_field(p, {
-            "$type": "StateProjectCustomField",
-            "field": {"id": state_proto["id"]},
-            "bundle": {"id": state_bundle["id"], "$type": "StateBundle"},
-            "canBeEmpty": False,
-        }, "State")
+        attach_state(p, state_proto, state_bundle)
         for fname in ENUM_FIELDS:
             attach_field(p, {
                 "$type": "EnumProjectCustomField",
