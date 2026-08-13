@@ -1,0 +1,16 @@
+# Auto-provisions the Prometheus datasource on first boot, with a fixed UID
+# so anything scripting against this Grafana (e.g. workInfra's agentkit) can
+# rely on GRAFANA_DATASOURCE_UID=prometheus without ever opening the UI.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: 15s

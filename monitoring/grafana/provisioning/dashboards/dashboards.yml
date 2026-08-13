@@ -1,0 +1,14 @@
+# Auto-loads any dashboard JSON dropped in /var/lib/grafana/dashboards, so
+# dashboards shipped in this repo appear without manual import.
+
+apiVersion: 1
+
+providers:
+  - name: monitoring
+    orgId: 1
+    folder: Server
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

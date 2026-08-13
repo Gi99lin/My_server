@@ -1,0 +1,117 @@
+services:
+  # Per-container CPU/memory/network for every container on the box, not
+  # just one project's — read-only: mounts host paths to read cgroup and
+  # Docker state, writes nothing back. No host port, no proxy_network — only
+  # prometheus, over monitoring_network, ever talks to it.
+  cadvisor:
+    image: ${CADVISOR_IMAGE:-gcr.io/cadvisor/cadvisor:v0.49.1}
+    container_name: cadvisor
+    restart: unless-stopped
+    command:
+      - --housekeeping_interval=15s
+      - --docker_only=true
+      - --store_container_labels=false
+      # This host runs Docker on the containerd snapshotter, not the legacy
+      # overlay2 graphdriver (check with `docker info | grep driver-type`).
+      # cAdvisor's default overlay2 layer-ID lookup fails for every container
+      # on that setup ("failed to identify the read-write layer ID") and only
+      # the root cgroup gets reported without these two flags — "moby" is the
+      # namespace Docker's containerd integration always uses.
+      - --containerd=/var/run/containerd/containerd.sock
+      - --containerd-namespace=moby
+      # The disk-usage collector still tries the legacy overlay2 writable-
+      # layer lookup and fails constructing the WHOLE container object over
+      # it (not just that metric) — the exact failure this file is here for.
+      - --disable_metrics=disk,diskIO
+      # Do not remove --docker_only=true: without it cAdvisor also picks up
+      # every systemd slice and VM on the host (confirmed — a QEMU Windows VM
+      # under libvirt.scope showed up), none of which get a "name" label
+      # since they aren't Docker containers, and it did not fix the read-
+      # write-layer errors either. A grep test that looked like it proved
+      # otherwise was checking for the wrong thing (absence of `name=""`,
+      # which also matches lines with no name label at all, not presence of
+      # a real name) — real container names never appeared without this
+      # flag, verified by extracting actual label values afterward.
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    networks:
+      - monitoring_network
+
+  # Host-level CPU/memory/disk. Same read-only pattern as cadvisor.
+  node-exporter:
+    image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:latest}
+    container_name: node-exporter
+    restart: unless-stopped
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host/root
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro
+    networks:
+      - monitoring_network
+
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:latest}
+    container_name: prometheus
+    restart: unless-stopped
+    depends_on:
+      - cadvisor
+      - node-exporter
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      # Admin access only — reach it over SSH tunnel or through Grafana's
+      # own query proxy. Nothing else on the box needs to reach Prometheus
+      # directly; Grafana is the one interface anything external talks to.
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    networks:
+      - monitoring_network
+
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:11.3.0}
+    container_name: grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_BASIC_ENABLED: "true"
+      TZ: ${TZ:-Europe/Moscow}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      # Host port for direct/tunnel access; NPM proxies via proxy_network
+      # (grafana:3000) for grafana.gigglin.tech, same pattern as youtrack.
+      - "127.0.0.1:${GRAFANA_PORT:-3020}:3000"
+    networks:
+      - monitoring_network
+      - proxy_network
+
+networks:
+  monitoring_network:
+    driver: bridge
+  proxy_network:
+    external: true
+    name: my_server_proxy_network
+
+volumes:
+  prometheus_data:
+    name: prometheus_data
+  grafana_data:
+    name: grafana_data
