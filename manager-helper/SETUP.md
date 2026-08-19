@@ -18,7 +18,7 @@ Fill in every blank value in `.env`:
 
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_WEBHOOK_BASE_URL` — bot runs via long-polling, not a webhook, but `Settings` requires these to be set; `TELEGRAM_WEBHOOK_SECRET`/`_BASE_URL` can be any placeholder values.
 - `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `TRANSCRIPTION_MODEL` — OpenAI-compatible endpoint used for parsing/transcription.
-- `YOUTRACK_BASE_URL` (`https://youtrack.gigglin.tech`), `YOUTRACK_API_TOKEN`, `YOUTRACK_DEFAULT_PROJECT_KEY` (`MHT`).
+- `YOUTRACK_API_TOKEN`, `YOUTRACK_DEFAULT_PROJECT_KEY` (`MHT`). Leave `YOUTRACK_BASE_URL` as the `http://youtrack:8080` default already in `env.example` — **not** `https://youtrack.gigglin.tech`. This host has no NAT loopback, so the public domain times out from a container running on the same server (same issue documented in `youtrack/docker-compose.yml`); `docker-compose.yml` here joins `proxy_network` specifically so the in-network address resolves.
 - `FERNET_KEY` — generate with `python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
 
 Leave `POSTGRES_DSN` / `REDIS_URL` as the defaults already in `env.example` —

@@ -46,6 +46,10 @@ services:
         condition: service_healthy
     networks:
       - manager_helper_network
+      - proxy_network   # reach youtrack:8080 directly -- the host has no NAT
+                         # loopback, so youtrack.gigglin.tech times out from
+                         # containers running on this same server (see youtrack/
+                         # docker-compose.yml's comment on the same issue)
 
   # ==================== Manager Helper — ARQ Worker ====================
   manager-helper-worker:
@@ -64,11 +68,15 @@ services:
         condition: service_healthy
     networks:
       - manager_helper_network
+      - proxy_network
 
 # ==================== Networks & Volumes ====================
 networks:
   manager_helper_network:
     driver: bridge
+  proxy_network:
+    external: true
+    name: my_server_proxy_network
 
 volumes:
   manager_helper_postgres_data:
