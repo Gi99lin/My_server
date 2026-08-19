@@ -56,6 +56,11 @@ Self-hosted YouTrack Server — the task database behind `hermes-tasks`. Include
 - **Location**: [`youtrack/`](./youtrack)
 - **Deployment**: `cd youtrack && ./install.sh`
 
+### Manager Helper (Telegram → YouTrack)
+Telegram bot (@Gigglin/@Mirabilis) that turns manager voice notes/text into structured YouTrack tasks — LLM parsing, assignee resolution, per-project routing. Source in the separate `manager-helper` repo; image auto-builds to `ghcr.io/gi99lin/manager-helper:latest` on push, Watchtower deploys it here.
+- **Location**: [`manager-helper/`](./manager-helper) • Runbook: [`manager-helper/SETUP.md`](./manager-helper/SETUP.md)
+- **Deployment**: `cd manager-helper && docker compose up -d`
+
 ### LibreChat
 An enterprise-grade, unified web interface for interacting with various LLM providers.
 - **Location**: [`librechat/`](./librechat)
@@ -119,6 +124,7 @@ A complete federated Matrix messaging stack with built-in VoIP via LiveKit. Depl
 - `librechat/` - Chat UI for local and remote LLMs.
 - `life-dashboard/` - Personal dashboard for tracking and analytics.
 - `livekit-config/` - Custom configuration sets for LiveKit services.
+- `manager-helper/` - Telegram → YouTrack task bot (image from the separate `manager-helper` repo).
 - `marzneshin/` - Xray proxy panel configuration.
 - `matrix/` - Complete Matrix deployment scripts for K3s.
 - `nextcloud/` - Nextcloud deployment files.

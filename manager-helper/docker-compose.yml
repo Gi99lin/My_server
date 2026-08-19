@@ -1,0 +1,75 @@
+services:
+  # ==================== Manager Helper — PostgreSQL ====================
+  manager-helper-db:
+    image: postgres:16-alpine
+    container_name: manager-helper-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mh
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mh}
+      POSTGRES_DB: mh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mh"]
+      interval: 5s
+      retries: 10
+    volumes:
+      - manager_helper_postgres_data:/var/lib/postgresql/data
+    networks:
+      - manager_helper_network
+
+  # ==================== Manager Helper — Redis ====================
+  manager-helper-redis:
+    image: redis:7-alpine
+    container_name: manager-helper-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+    networks:
+      - manager_helper_network
+
+  # ==================== Manager Helper — Telegram Bot ====================
+  manager-helper-bot:
+    image: ghcr.io/gi99lin/manager-helper:latest
+    container_name: manager-helper-bot
+    restart: unless-stopped
+    pull_policy: always
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+    env_file: .env
+    command: sh -c "alembic upgrade head && python -m manager_helper.bot.run_polling"
+    depends_on:
+      manager-helper-db:
+        condition: service_healthy
+      manager-helper-redis:
+        condition: service_healthy
+    networks:
+      - manager_helper_network
+
+  # ==================== Manager Helper — ARQ Worker ====================
+  manager-helper-worker:
+    image: ghcr.io/gi99lin/manager-helper:latest
+    container_name: manager-helper-worker
+    restart: unless-stopped
+    pull_policy: always
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+    env_file: .env
+    command: ["arq", "manager_helper.workers.arq_settings.WorkerSettings"]
+    depends_on:
+      manager-helper-db:
+        condition: service_healthy
+      manager-helper-redis:
+        condition: service_healthy
+    networks:
+      - manager_helper_network
+
+# ==================== Networks & Volumes ====================
+networks:
+  manager_helper_network:
+    driver: bridge
+
+volumes:
+  manager_helper_postgres_data:
+    name: manager-helper-postgres-data
