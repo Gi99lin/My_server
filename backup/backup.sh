@@ -7,7 +7,7 @@
 #           + libvirt VM disks + libvirt XML + /etc/iptables
 # =============================================================
 
-set -euo pipefail
+set -Eeuo pipefail
 
 # --- Config ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -53,6 +53,16 @@ notify() {
   fi
 }
 
+# --- Alert on any uncaught failure (e.g. Step 2 restic backup itself) ---
+# Step 1 dumps and Step 3/4 handle their own failures without aborting, so
+# whatever reaches here is a real "the backup did not happen tonight" event.
+on_error() {
+  local exit_code=$? line="$1"
+  log "ABORTED — script failed at line $line (exit $exit_code)"
+  notify "❌ Backup FAILED at line $line (exit $exit_code) — check $LOG_FILE on the server"
+}
+trap 'on_error $LINENO' ERR
+
 # --- Helper: dump a DB only if the container is running ---
 container_running() {
   docker ps --format '{{.Names}}' | grep -q "^${1}$"
@@ -60,6 +70,7 @@ container_running() {
 
 # --- Helper: run one dump command, log OK/size or FAILED, never abort the
 # rest of the backup because one DB (of a dozen) couldn't be dumped ---
+WARNINGS=0
 run_dump() {
   local desc="$1" outfile="$2"
   shift 2
@@ -67,6 +78,7 @@ run_dump() {
     log "    OK ($(du -sh "$outfile" | cut -f1))"
   else
     log "    FAILED — $desc (see $LOG_FILE for details)"
+    WARNINGS=$((WARNINGS + 1))
   fi
 }
 
@@ -292,20 +304,31 @@ restic backup \
 log "Step 2: Restic backup complete"
 
 # --- 3. Forget old snapshots (retention policy) ---
+# A lock conflict or transient B2 error here shouldn't cancel a backup that
+# already succeeded (Step 2) — log it, count it as a warning, move on.
 log "Step 3: Applying retention policy..."
-restic forget \
+if restic forget \
   --keep-daily 30 \
   --keep-weekly 8 \
   --keep-monthly 12 \
   --prune \
-  2>&1 | tee -a "$LOG_FILE"
-log "Step 3: Retention policy applied"
+  2>&1 | tee -a "$LOG_FILE"; then
+  log "Step 3: Retention policy applied"
+else
+  log "Step 3: FAILED (see above) — old snapshots may not have been pruned"
+  WARNINGS=$((WARNINGS + 1))
+fi
 
 # --- 4. Verify integrity (weekly — on Sundays) ---
 if [[ "$(date '+%u')" == "7" ]]; then
   log "Step 4: Running weekly integrity check..."
-  restic check 2>&1 | tee -a "$LOG_FILE"
-  log "Step 4: Integrity check complete"
+  if restic check 2>&1 | tee -a "$LOG_FILE"; then
+    log "Step 4: Integrity check complete"
+  else
+    log "Step 4: FAILED (see above) — repository integrity check did not pass"
+    WARNINGS=$((WARNINGS + 1))
+    notify "⚠️ Weekly restic integrity check FAILED — check $LOG_FILE on the server"
+  fi
 fi
 
 # --- 5. Cleanup temp dumps ---
@@ -318,7 +341,11 @@ DURATION_MIN=$(( DURATION / 60 ))
 DURATION_SEC=$(( DURATION % 60 ))
 
 log "=========================================="
-log "Backup completed in ${DURATION_MIN}m ${DURATION_SEC}s"
+log "Backup completed in ${DURATION_MIN}m ${DURATION_SEC}s (${WARNINGS} warning(s))"
 log "=========================================="
 
-notify "✅ Backup completed successfully in ${DURATION_MIN}m ${DURATION_SEC}s"
+if [[ "$WARNINGS" -gt 0 ]]; then
+  notify "⚠️ Backup completed in ${DURATION_MIN}m ${DURATION_SEC}s with ${WARNINGS} warning(s) — check $LOG_FILE"
+else
+  notify "✅ Backup completed successfully in ${DURATION_MIN}m ${DURATION_SEC}s"
+fi
