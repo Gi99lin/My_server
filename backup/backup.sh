@@ -30,6 +30,13 @@ export B2_ACCOUNT_KEY
 export RESTIC_PASSWORD
 export RESTIC_REPOSITORY="b2:${B2_BUCKET_NAME}"
 
+# root's ~/.docker/config.json is a directory (not a file) on this host,
+# which makes every docker exec/ps below print a harmless but noisy
+# "Error parsing config file" warning. Point docker at a throwaway config
+# dir instead of fixing/removing root's broken one.
+export DOCKER_CONFIG="/tmp/restic-backup-docker-config"
+mkdir -p "$DOCKER_CONFIG"
+
 # --- Logging helper ---
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
@@ -49,6 +56,18 @@ notify() {
 # --- Helper: dump a DB only if the container is running ---
 container_running() {
   docker ps --format '{{.Names}}' | grep -q "^${1}$"
+}
+
+# --- Helper: run one dump command, log OK/size or FAILED, never abort the
+# rest of the backup because one DB (of a dozen) couldn't be dumped ---
+run_dump() {
+  local desc="$1" outfile="$2"
+  shift 2
+  if "$@" > "$outfile" 2>>"$LOG_FILE"; then
+    log "    OK ($(du -sh "$outfile" | cut -f1))"
+  else
+    log "    FAILED — $desc (see $LOG_FILE for details)"
+  fi
 }
 
 # --- Rotate logs (keep last 5000 lines) ---
@@ -72,11 +91,10 @@ chmod 700 "$DUMP_DIR"
 # Nginx Proxy Manager (MariaDB) ---------------------------------------
 if container_running "nginx-proxy-manager-db"; then
   log "  Dumping nginx-proxy-manager-db (MariaDB)..."
-  docker exec nginx-proxy-manager-db \
-    mysqldump --all-databases -uroot -p"${NPM_DB_ROOT_PASSWORD}" \
-    --single-transaction --quick --lock-tables=false \
-    > "$DUMP_DIR/npm-all-databases.sql" 2>>"$LOG_FILE"
-  log "    OK ($(du -sh "$DUMP_DIR/npm-all-databases.sql" | cut -f1))"
+  run_dump "nginx-proxy-manager-db" "$DUMP_DIR/npm-all-databases.sql" \
+    docker exec nginx-proxy-manager-db \
+      mysqldump --all-databases -uroot -p"${NPM_DB_ROOT_PASSWORD}" \
+      --single-transaction --quick --lock-tables=false
 else
   log "  nginx-proxy-manager-db not running — skipping"
 fi
@@ -84,11 +102,10 @@ fi
 # Nextcloud (MariaDB) -------------------------------------------------
 if container_running "nextcloud-db"; then
   log "  Dumping nextcloud-db (MariaDB)..."
-  docker exec nextcloud-db \
-    mariadb-dump --all-databases -uroot -p"${NEXTCLOUD_DB_ROOT_PASSWORD:-mariadbroot}" \
-    --default-character-set=utf8mb4 --single-transaction --quick --skip-extended-insert \
-    > "$DUMP_DIR/nextcloud-all-databases.sql" 2>>"$LOG_FILE"
-  log "    OK ($(du -sh "$DUMP_DIR/nextcloud-all-databases.sql" | cut -f1))"
+  run_dump "nextcloud-db" "$DUMP_DIR/nextcloud-all-databases.sql" \
+    docker exec nextcloud-db \
+      mariadb-dump --all-databases -uroot -p"${NEXTCLOUD_DB_ROOT_PASSWORD:-mariadbroot}" \
+      --default-character-set=utf8mb4 --single-transaction --quick --skip-extended-insert
 else
   log "  nextcloud-db not running — skipping"
 fi
@@ -97,15 +114,14 @@ fi
 # The container name carries the compose project prefix
 # (e.g. marzneshin-marzneshin-db-1), so resolve it by pattern instead
 # of hardcoding "marzneshin-db" — otherwise the dump is silently skipped.
-MARZ_DB=$(docker ps --format '{{.Names}}' | grep -E '^marzneshin.*db' | head -1)
+MARZ_DB=$(docker ps --format '{{.Names}}' | grep -E '^marzneshin.*db' | head -1 || true)
 if [[ -n "$MARZ_DB" ]]; then
   if [[ -n "${MARZNESHIN_DB_ROOT_PASSWORD:-}" ]]; then
     log "  Dumping $MARZ_DB (MariaDB)..."
-    docker exec "$MARZ_DB" \
-      mariadb-dump --all-databases -uroot -p"${MARZNESHIN_DB_ROOT_PASSWORD}" \
-      --single-transaction --quick --lock-tables=false \
-      > "$DUMP_DIR/marzneshin-all-databases.sql" 2>>"$LOG_FILE"
-    log "    OK ($(du -sh "$DUMP_DIR/marzneshin-all-databases.sql" | cut -f1))"
+    run_dump "$MARZ_DB" "$DUMP_DIR/marzneshin-all-databases.sql" \
+      docker exec "$MARZ_DB" \
+        mariadb-dump --all-databases -uroot -p"${MARZNESHIN_DB_ROOT_PASSWORD}" \
+        --single-transaction --quick --lock-tables=false
   else
     log "  $MARZ_DB running but MARZNESHIN_DB_ROOT_PASSWORD not set — skipping"
   fi
@@ -116,10 +132,9 @@ fi
 # LibreChat (MongoDB) -------------------------------------------------
 if container_running "chat-mongodb"; then
   log "  Dumping chat-mongodb (MongoDB)..."
-  docker exec chat-mongodb \
-    mongodump --archive --gzip \
-    > "$DUMP_DIR/librechat-mongo.archive.gz" 2>>"$LOG_FILE"
-  log "    OK ($(du -sh "$DUMP_DIR/librechat-mongo.archive.gz" | cut -f1))"
+  run_dump "chat-mongodb" "$DUMP_DIR/librechat-mongo.archive.gz" \
+    docker exec chat-mongodb \
+      mongodump --archive --gzip
 else
   log "  chat-mongodb not running — skipping"
 fi
@@ -128,10 +143,9 @@ fi
 if container_running "testcase-db"; then
   if [[ -n "${TESTCASE_DB_PASSWORD:-}" ]]; then
     log "  Dumping testcase-db (Postgres)..."
-    docker exec -e PGPASSWORD="${TESTCASE_DB_PASSWORD}" testcase-db \
-      pg_dumpall -U "${TESTCASE_DB_USER:-postgres}" \
-      > "$DUMP_DIR/testcase-all-databases.sql" 2>>"$LOG_FILE"
-    log "    OK ($(du -sh "$DUMP_DIR/testcase-all-databases.sql" | cut -f1))"
+    run_dump "testcase-db" "$DUMP_DIR/testcase-all-databases.sql" \
+      docker exec -e PGPASSWORD="${TESTCASE_DB_PASSWORD}" testcase-db \
+        pg_dumpall -U "${TESTCASE_DB_USER:-postgres}"
   else
     log "  testcase-db running but TESTCASE_DB_PASSWORD not set — skipping"
   fi
@@ -152,15 +166,85 @@ if container_running "guacamole-postgres"; then
     GUAC_USER="${GUAC_USER:-guacamole_user}"
     GUAC_DB="${GUAC_DB:-guacamole_db}"
     log "  Dumping guacamole-postgres..."
-    docker exec -e PGPASSWORD="${GUAC_PASS}" guacamole-postgres \
-      pg_dump -U "${GUAC_USER}" "${GUAC_DB}" \
-      > "$DUMP_DIR/guacamole.sql" 2>>"$LOG_FILE"
-    log "    OK ($(du -sh "$DUMP_DIR/guacamole.sql" | cut -f1))"
+    run_dump "guacamole-postgres" "$DUMP_DIR/guacamole.sql" \
+      docker exec -e PGPASSWORD="${GUAC_PASS}" guacamole-postgres \
+        pg_dump -U "${GUAC_USER}" "${GUAC_DB}"
   else
     log "  guacamole-postgres running but $GUAC_ENV missing — skipping"
   fi
 else
   log "  guacamole-postgres not running — skipping"
+fi
+
+# Manager Helper (Postgres) --------------------------------------------
+if container_running "manager-helper-db"; then
+  MH_ENV="$PROJECT_DIR/manager-helper/.env"
+  MH_PASS=$(grep -E '^POSTGRES_PASSWORD=' "$MH_ENV" 2>/dev/null | cut -d= -f2)
+  MH_PASS="${MH_PASS:-mh}"
+  log "  Dumping manager-helper-db (Postgres)..."
+  run_dump "manager-helper-db" "$DUMP_DIR/manager-helper.sql" \
+    docker exec -e PGPASSWORD="${MH_PASS}" manager-helper-db \
+      pg_dump -U mh mh
+else
+  log "  manager-helper-db not running — skipping"
+fi
+
+# HR Bot — resumatch-bot dev + prod (Postgres) -------------------------
+# Separate git repo checked out at hrBot/ (not a submodule of this repo).
+# Each environment has its own container, .env file and Postgres DB.
+HRBOT_DIR="$PROJECT_DIR/hrBot"
+dump_hrbot_env() {
+  local env_name="$1" container="$2" env_file="$3"
+  if container_running "$container"; then
+    if [[ -f "$env_file" ]]; then
+      local user pass db
+      user=$(grep -E '^POSTGRES_USER=' "$env_file" | cut -d= -f2); user="${user:-resumatch_user}"
+      pass=$(grep -E '^POSTGRES_PASSWORD=' "$env_file" | cut -d= -f2); pass="${pass:-secret_password}"
+      db=$(grep -E '^POSTGRES_DB=' "$env_file" | cut -d= -f2); db="${db:-resumatch_db}"
+      log "  Dumping $container (Postgres, hrBot $env_name)..."
+      run_dump "$container" "$DUMP_DIR/hrbot-${env_name}.sql" \
+        docker exec -e PGPASSWORD="${pass}" "$container" \
+          pg_dump -U "${user}" "${db}"
+    else
+      log "  $container running but $env_file missing — skipping"
+    fi
+  else
+    log "  $container not running — skipping"
+  fi
+}
+dump_hrbot_env "prod" "hrbot_prod_db" "$HRBOT_DIR/.env.prod"
+dump_hrbot_env "dev"  "hrbot_dev_db"  "$HRBOT_DIR/.env.dev"
+
+# Agentfarm / workInfra — shared Postgres for Dify+Langfuse+n8n+LiteLLM -
+# Separate project outside this repo (~/workInfra, sibling of My_server).
+# One Postgres instance hosts several app databases, so dump everything
+# + roles via pg_dumpall instead of a single database.
+WORKINFRA_ENV="$(dirname "$PROJECT_DIR")/workInfra/.env"
+if container_running "agentfarm-postgres"; then
+  if [[ -f "$WORKINFRA_ENV" ]]; then
+    AF_USER=$(grep -E '^POSTGRES_USER=' "$WORKINFRA_ENV" | cut -d= -f2)
+    AF_PASS=$(grep -E '^POSTGRES_PASSWORD=' "$WORKINFRA_ENV" | cut -d= -f2)
+    log "  Dumping agentfarm-postgres (Postgres, all databases)..."
+    run_dump "agentfarm-postgres" "$DUMP_DIR/agentfarm-all-databases.sql" \
+      docker exec -e PGPASSWORD="${AF_PASS}" agentfarm-postgres \
+        pg_dumpall -U "${AF_USER}"
+  else
+    log "  agentfarm-postgres running but $WORKINFRA_ENV missing — skipping"
+  fi
+else
+  log "  agentfarm-postgres not running — skipping"
+fi
+
+# LibreChat code-interpreter vector DB (pgvector) -----------------------
+# Credentials match the hardcoded defaults in librechat/docker-compose.yml;
+# override via backup/.env (LIBRECHAT_VECTORDB_*) if that file ever changes.
+if container_running "chat-vectordb"; then
+  log "  Dumping chat-vectordb (Postgres/pgvector)..."
+  run_dump "chat-vectordb" "$DUMP_DIR/chat-vectordb.sql" \
+    docker exec -e PGPASSWORD="${LIBRECHAT_VECTORDB_PASSWORD:-mypassword}" chat-vectordb \
+      pg_dump -U "${LIBRECHAT_VECTORDB_USER:-myuser}" "${LIBRECHAT_VECTORDB_DB:-mydatabase}"
+else
+  log "  chat-vectordb not running — skipping"
 fi
 
 # libvirt VM definitions ---------------------------------------------
@@ -170,8 +254,7 @@ if command -v virsh >/dev/null 2>&1; then
   log "  Dumping libvirt domain XMLs..."
   mkdir -p "$DUMP_DIR/libvirt"
   for dom in $(virsh list --all --name | grep -v '^$'); do
-    virsh dumpxml "$dom" > "$DUMP_DIR/libvirt/${dom}.xml" 2>>"$LOG_FILE"
-    log "    OK ${dom}.xml"
+    run_dump "libvirt domain $dom" "$DUMP_DIR/libvirt/${dom}.xml" virsh dumpxml "$dom"
   done
 else
   log "  virsh not installed — skipping libvirt XML dump"

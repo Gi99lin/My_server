@@ -20,7 +20,15 @@
 - `chat-mongodb` (MongoDB, LibreChat)
 - `testcase-db` (Postgres, AI Testcase Generator)
 - `guacamole-postgres` (Postgres) — кредлы читаются из `../guacamole/.env` автоматически
+- `manager-helper-db` (Postgres) — пароль читается из `../manager-helper/.env`
+- `hrbot_prod_db` / `hrbot_dev_db` (Postgres) — отдельный репозиторий `hrBot/` внутри `My_server/`, кредлы из `hrBot/.env.prod` / `hrBot/.env.dev`
+- `agentfarm-postgres` (Postgres, все базы разом через `pg_dumpall`) — Dify/Langfuse/n8n/LiteLLM, отдельный проект `~/workInfra` (сосед `My_server`, не часть этого репо), кредлы из `workInfra/.env`
+- `chat-vectordb` (Postgres/pgvector, LibreChat code-interpreter)
 - libvirt XML всех доменов (`virsh dumpxml`)
+
+> `hrBot` и `workInfra` — отдельные git-репозитории на сервере, не часть `My_server`.
+> `backup.sh` читает их `.env` напрямую (по аналогии с Guacamole), доп. переменные
+> в `backup/.env` для них не нужны.
 
 **Расписание:** каждую ночь в 03:00  
 **Хранение:** 30 ежедневных | 8 еженедельных | 12 ежемесячных снапшотов  
@@ -221,6 +229,37 @@ source /home/gigglin/My_server/backup/.env
 cat /tmp/restore/tmp/restic-db-dumps/testcase-all-databases.sql | \
   docker exec -i -e PGPASSWORD="${TESTCASE_DB_PASSWORD}" testcase-db \
     psql -U "${TESTCASE_DB_USER:-postgres}"
+```
+
+**Manager Helper (Postgres):**
+```bash
+source /home/gigglin/My_server/manager-helper/.env
+cat /tmp/restore/tmp/restic-db-dumps/manager-helper.sql | \
+  docker exec -i -e PGPASSWORD="${POSTGRES_PASSWORD:-mh}" manager-helper-db \
+    psql -U mh -d mh
+```
+
+**HR Bot prod/dev (Postgres):**
+```bash
+source /home/gigglin/My_server/hrBot/.env.prod   # или .env.dev для dev
+cat /tmp/restore/tmp/restic-db-dumps/hrbot-prod.sql | \
+  docker exec -i -e PGPASSWORD="${POSTGRES_PASSWORD:-secret_password}" hrbot_prod_db \
+    psql -U "${POSTGRES_USER:-resumatch_user}" -d "${POSTGRES_DB:-resumatch_db}"
+```
+
+**Agentfarm / workInfra (Postgres, все базы):**
+```bash
+source ~/workInfra/.env
+cat /tmp/restore/tmp/restic-db-dumps/agentfarm-all-databases.sql | \
+  docker exec -i -e PGPASSWORD="${POSTGRES_PASSWORD}" agentfarm-postgres \
+    psql -U "${POSTGRES_USER}"
+```
+
+**LibreChat vector DB (Postgres/pgvector):**
+```bash
+cat /tmp/restore/tmp/restic-db-dumps/chat-vectordb.sql | \
+  docker exec -i -e PGPASSWORD="mypassword" chat-vectordb \
+    psql -U myuser -d mydatabase
 ```
 
 ### Шаг 6.5 — Восстанови виртуалки libvirt
