@@ -110,6 +110,11 @@ A complete federated Matrix messaging stack with built-in VoIP via LiveKit. Depl
 - **Location**: [`matrix/`](./matrix)
 - **Docs**: [Deployment Walkthrough](./matrix/WALKTHROUGH.md)
 
+### MCP Telegram Cloud
+Self-hosted, single-operator-mode MCP server exposing Telegram (read messages, search chats, download media, multi-account switching) to Claude/ChatGPT via `mcp-tg.gigglin.tech`. Runs an admin-login-gated fork ([Gi99lin/mcp-telegram-cloud](https://github.com/Gi99lin/mcp-telegram-cloud), upstream PR: [mcp-telegram/mcp-telegram-cloud#20](https://github.com/mcp-telegram/mcp-telegram-cloud/pull/20)) instead of the public hosted `mcp-telegram.com`, so only this deployment's operator can ever register an MCP client.
+- **Location**: [`mcp-telegram/`](./mcp-telegram) • Runbook: [`mcp-telegram/SETUP.md`](./mcp-telegram/SETUP.md)
+- **Deployment**: `cd mcp-telegram && docker compose up -d`
+
 ---
 
 ## 📂 Full Directory Structure
@@ -126,6 +131,7 @@ A complete federated Matrix messaging stack with built-in VoIP via LiveKit. Depl
 - `livekit-config/` - Custom configuration sets for LiveKit services.
 - `manager-helper/` - Telegram → YouTrack task bot (image from the separate `manager-helper` repo).
 - `marzneshin/` - Xray proxy panel configuration.
+- `mcp-telegram/` - Self-hosted MCP Telegram Cloud, single-operator mode (image from the separate `mcp-telegram-cloud` fork).
 - `matrix/` - Complete Matrix deployment scripts for K3s.
 - `nextcloud/` - Nextcloud deployment files.
 - `omniroute/` - Setup for LLM proxy routing.
