@@ -11,6 +11,14 @@ FROM myoung34/github-runner:ubuntu-noble@sha256:c310e303ef09c037fbf3dca4668a9e29
 # downgrade/upgrade round trip against it. The upstream image has git, curl,
 # jq, make, openssl, python3, node and the docker CLI + compose plugin
 # already, but no PostgreSQL client.
+#
+# python-is-python3: ci.yml's e2e job runs a `python -c ...` one-liner
+# directly on the runner (checking docker-compose.e2e.yml's resolved license
+# mount) to verify the license file is bind-mounted read-only before the
+# stack starts. GitHub-hosted Ubuntu runners carry a bare `python` alongside
+# `python3`; plain Ubuntu 24.04 deliberately does not - confirmed by running
+# this exact job here first (`python: command not found`, exit 127) before
+# adding the package.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends postgresql-client \
+    && apt-get install -y --no-install-recommends postgresql-client python-is-python3 \
     && rm -rf /var/lib/apt/lists/*
