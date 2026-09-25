@@ -97,7 +97,11 @@ services:
       # about to reuse).
       CONFIGURED_ACTIONS_RUNNER_FILES_DIR: /persist
       DISABLE_AUTOMATIC_DEREGISTRATION: "true"
-      EPHEMERAL: "false"
+      # Deliberately unset, not "false": the entrypoint checks EPHEMERAL for
+      # being non-empty, not for being "true" - setting it to the string
+      # "false" would still turn --ephemeral on and deregister this runner
+      # after its first job (caught in testing: SETUP.md is not affected,
+      # but see the report for how this was found).
     volumes:
       - runner-persist:/persist
       - runner-work:/work
