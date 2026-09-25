@@ -19,6 +19,15 @@ FROM myoung34/github-runner:ubuntu-noble@sha256:c310e303ef09c037fbf3dca4668a9e29
 # `python3`; plain Ubuntu 24.04 deliberately does not - confirmed by running
 # this exact job here first (`python: command not found`, exit 127) before
 # adding the package.
+#
+# python3-openpyxl: the e2e suite's lib-15 excel-export spec downloads the
+# exported .xlsx and reads it back with openpyxl to assert its rows, via
+# `process.env.PYTHON` (falling back, when unset, to a path under the
+# maintainer's own home directory that exists only on his Mac). ci.yml sets
+# PYTHON for the e2e job to this package's interpreter - confirmed missing
+# by running the suite here first (`spawnSync .../.venv/bin/python ENOENT`,
+# the fallback path, since nothing set PYTHON) before adding the package;
+# same gap would hit a GitHub-hosted runner, so this is not self-hosted-only.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends postgresql-client python-is-python3 \
+    && apt-get install -y --no-install-recommends postgresql-client python-is-python3 python3-openpyxl \
     && rm -rf /var/lib/apt/lists/*
