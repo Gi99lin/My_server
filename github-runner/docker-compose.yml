@@ -100,11 +100,13 @@ services:
       # Deliberately unset, not "false": the entrypoint checks EPHEMERAL for
       # being non-empty, not for being "true" - setting it to the string
       # "false" would still turn --ephemeral on and deregister this runner
-      # after its first job (caught in testing: SETUP.md is not affected,
-      # but see the report for how this was found).
+      # after its first job (caught from the registration log in testing,
+      # before any workflow change was pushed; see the TMS track's report).
+      #
       # A pinned runner image should not silently swap its own binary for a
-      # newer one mid-deployment - and ruled out one theory for a session
-      # GitHub dropped right after this runner's first job (see the report).
+      # newer one mid-deployment either way, and setting this ruled out one
+      # theory for a session GitHub dropped right after this runner's first
+      # job (also in the report).
       DISABLE_AUTO_UPDATE: "true"
     volumes:
       - runner-persist:/persist

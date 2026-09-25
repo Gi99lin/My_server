@@ -11,8 +11,10 @@ touches the host's own Docker daemon or its other containers:
   `/var/run/docker.sock` on the host.
 - **`runner`** — the GitHub Actions runner, built from
   [`myoung34/github-runner`](https://github.com/myoung34/docker-github-actions-runner)'s
-  `ubuntu-noble` image plus `postgresql-client` (`Dockerfile` in this
-  directory), talking only to `runner-dind`'s engine.
+  `ubuntu-noble` image plus the packages a few CI steps run directly on the
+  runner assume (`postgresql-client`, `python-is-python3`,
+  `python3-openpyxl` — `Dockerfile` in this directory has the reason for
+  each), talking only to `runner-dind`'s engine.
 - **`runner-pruner`** — cleans `runner-dind`'s own image/volume store on a
   schedule, so a long-lived CI cache cannot fill the host's disk.
 
