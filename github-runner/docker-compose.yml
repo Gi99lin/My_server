@@ -1,0 +1,146 @@
+# Self-hosted GitHub Actions runner for Gi99lin/ai-testcase-generator.
+#
+# Three containers, one purpose: run the TMS's CI without touching the host's
+# Docker or the 52 other containers already on it.
+#
+#   runner-dind   A Docker-in-Docker engine, entirely separate from the host's
+#                 Docker daemon, with its own image/container/volume storage
+#                 (dind-data). --privileged is what nested Docker requires;
+#                 it is a cost of this container only, not of the host.
+#   runner        The GitHub Actions runner itself. It talks to runner-dind's
+#                 engine over DOCKER_HOST, never to the host's
+#                 /var/run/docker.sock, and shares runner-dind's network
+#                 namespace (network_mode: service:runner-dind) so a port a
+#                 CI job publishes (e.g. the release smoke's proxy on 8443,
+#                 already taken on the host by another service) lands on
+#                 this pair's own loopback, never on the host's.
+#   runner-pruner A tiny sidecar that periodically cleans runner-dind's own
+#                 image/volume/build-cache store, so a long-lived CI cache
+#                 does not fill the host's disk (77 GB free at deploy time).
+#                 It only ever talks to runner-dind's engine.
+#
+# See SETUP.md for how to deploy, update, and rotate the runner's
+# registration, and for the two bind-mount gotchas (the work directory and
+# /tmp) this file exists to work around.
+
+services:
+  runner-dind:
+    image: docker:29-dind@sha256:3f3c01aaaebf7cce837356b688b7c059a4749f10bd7660dec7c58fc454a283f0
+    container_name: tms-ci-dind
+    restart: unless-stopped
+    privileged: true
+    environment:
+      # No TLS: this daemon's TCP port is reachable only from inside the
+      # runner/runner-dind pair's own shared network namespace, which is
+      # never published to the host or to runner-pruner's network.
+      DOCKER_TLS_CERTDIR: ""
+    command:
+      - --host=unix:///var/run/docker.sock
+      - --host=tcp://0.0.0.0:2375
+    volumes:
+      - dind-data:/var/lib/docker
+      # Shared with the runner service at the identical path. A CI job's
+      # `docker compose` runs as the runner's own client process, but the
+      # bind-mount sources it resolves (e.g. docker-compose.e2e.yml's
+      # `./backend/tests/fixtures/keycloak`, or release-smoke's TLS cert
+      # under a fresh `mktemp -d`) are opened by *this* engine - so a source
+      # path only works if it exists here too, at the same absolute path.
+      - runner-work:/work
+      - runner-tmp:/tmp
+    networks:
+      - runner_net
+    # The e2e stack (Postgres, Keycloak, MinIO, backend, frontend, webhook
+    # receiver) peaks at about 4-6 GB; the release stack is smaller. Only one
+    # job runs at a time (one runner), so this covers either with headroom
+    # without being able to starve the host's other 52 containers.
+    mem_limit: 10g
+    cpus: 5.0
+    healthcheck:
+      test: ["CMD", "docker", "info"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 15s
+
+  runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tms-ci-runner:noble
+    container_name: tms-ci-runner
+    restart: unless-stopped
+    depends_on:
+      runner-dind:
+        condition: service_healthy
+    # Shares runner-dind's netns instead of joining runner_net directly: a
+    # container a job publishes a port from becomes reachable at this
+    # container's own `localhost`, exactly like the GitHub-hosted runner it
+    # replaces, and never touches the host's network at all.
+    network_mode: "service:runner-dind"
+    environment:
+      DOCKER_HOST: tcp://localhost:2375
+      REPO_URL: ${REPO_URL:-https://github.com/Gi99lin/ai-testcase-generator}
+      RUNNER_SCOPE: repo
+      RUNNER_NAME: ${RUNNER_NAME:-tms-ci-runner-1}
+      RANDOM_RUNNER_SUFFIX: "false"
+      # config.sh adds self-hosted + linux + x64 automatically; this adds
+      # only the project label, giving the labels: self-hosted, linux, x64, tms.
+      LABELS: ${LABELS:-tms}
+      RUNNER_TOKEN: ${RUNNER_TOKEN:?set RUNNER_TOKEN in github-runner/.env - see SETUP.md}
+      RUNNER_WORKDIR: /work
+      # Registration persists in the runner-persist volume: on every restart
+      # the entrypoint copies it back into place and, finding .runner
+      # already there, skips config.sh entirely - no fresh token needed.
+      # DISABLE_AUTOMATIC_DEREGISTRATION is required by the entrypoint
+      # whenever reuse is turned on this way (it refuses to start without
+      # it, to stop a restart from deregistering the very runner it is
+      # about to reuse).
+      CONFIGURED_ACTIONS_RUNNER_FILES_DIR: /persist
+      DISABLE_AUTOMATIC_DEREGISTRATION: "true"
+      EPHEMERAL: "false"
+    volumes:
+      - runner-persist:/persist
+      - runner-work:/work
+      - runner-tmp:/tmp
+    mem_limit: 6g
+    cpus: 3.0
+
+  runner-pruner:
+    image: docker:29-cli@sha256:018edbc908e08fcc9dbf029c812c34251e9b4719e6f71ca0e5eae2a987d014ca
+    container_name: tms-ci-dind-pruner
+    restart: unless-stopped
+    depends_on:
+      runner-dind:
+        condition: service_healthy
+    environment:
+      DOCKER_HOST: tcp://runner-dind:2375
+    networks:
+      - runner_net
+    entrypoint: ["/bin/sh", "-c"]
+    # Every 6 hours: unused images, stopped containers, unused networks,
+    # unused volumes and the build cache, all inside runner-dind's own
+    # store only. A CI job always tears its own stack down (make e2e-down;
+    # release-smoke's trap), so in normal operation this only ever reclaims
+    # pulled/built images between runs - it is the backstop for whatever a
+    # killed job leaves behind, on a host that already has 77 GB free.
+    command:
+      - |
+        set -e
+        while true; do
+          date -Iseconds
+          echo "[runner-pruner] pruning runner-dind"
+          docker system prune -a -f --volumes || true
+          sleep 21600
+        done
+    mem_limit: 256m
+    cpus: 0.5
+
+networks:
+  runner_net:
+    driver: bridge
+
+volumes:
+  dind-data:
+  runner-work:
+  runner-tmp:
+  runner-persist:

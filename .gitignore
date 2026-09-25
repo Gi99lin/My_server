@@ -3,6 +3,7 @@
 .env.local
 hermes/.env
 mcp-telegram/.env
+github-runner/.env
 
 # Docker
 *.log
