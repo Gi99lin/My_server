@@ -259,6 +259,18 @@ else
   log "  chat-vectordb not running — skipping"
 fi
 
+# DMAIC Studio (Postgres) ----------------------------------------------
+# Credentials come from the container's own environment, so nothing needs
+# to be duplicated in backup/.env.
+if container_running "dmaic-studio-db-1"; then
+  log "  Dumping dmaic-studio-db-1 (Postgres, all databases)..."
+  run_dump "dmaic-studio-db-1" "$DUMP_DIR/dmaic-studio-all-databases.sql" \
+    docker exec dmaic-studio-db-1 \
+      sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dumpall -U "$POSTGRES_USER"'
+else
+  log "  dmaic-studio-db-1 not running — skipping"
+fi
+
 # libvirt VM definitions ---------------------------------------------
 # Dump XML of every defined domain so the VM can be re-defined on a
 # fresh host without manually clicking through virt-install again.

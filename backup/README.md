@@ -22,6 +22,7 @@
 - `guacamole-postgres` (Postgres) — кредлы читаются из `../guacamole/.env` автоматически
 - `manager-helper-db` (Postgres) — пароль читается из `../manager-helper/.env`
 - `hrbot_prod_db` / `hrbot_dev_db` (Postgres) — отдельный репозиторий `hrBot/` внутри `My_server/`, кредлы из `hrBot/.env.prod` / `hrBot/.env.dev`
+- `dmaic-studio-db-1` (Postgres 16, все базы через `pg_dumpall`) — DMAIC Studio, кредлы берутся из окружения самого контейнера
 - `agentfarm-postgres` (Postgres, все базы разом через `pg_dumpall`) — Dify/Langfuse/n8n/LiteLLM, отдельный проект `~/workInfra` (сосед `My_server`, не часть этого репо), кредлы из `workInfra/.env`
 - `chat-vectordb` (Postgres/pgvector, LibreChat code-interpreter)
 - libvirt XML всех доменов (`virsh dumpxml`)
