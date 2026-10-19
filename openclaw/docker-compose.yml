@@ -3,9 +3,11 @@
 services:
   # ==================== OpenClaw Gateway ====================
   openclaw-gateway:
+    # Disabled 2026-10-19: no autostart. Enable with: docker compose --profile disabled up -d
+    profiles: ["disabled"]
+    restart: "no"
     image: ghcr.io/openclaw/openclaw:latest
     container_name: openclaw-gateway
-    restart: unless-stopped
     ports:
       - "18789:18789"
     volumes:
@@ -76,9 +78,11 @@ services:
 
   # ==================== Spawn Sanitizer Proxy ====================
   spawn-sanitizer:
+    # Disabled 2026-10-19: no autostart. Enable with: docker compose --profile disabled up -d
+    profiles: ["disabled"]
+    restart: "no"
     image: node:22-slim
     container_name: spawn-sanitizer
-    restart: unless-stopped
     volumes:
       - ${OPENCLAW_WORKSPACE_DIR:-~/.openclaw/workspace}/scripts/subagent/spawn-sanitizer-proxy.mjs:/app/proxy.mjs:ro
     environment:
@@ -97,9 +101,11 @@ services:
 
   # ==================== Browserless (headless Chrome for browser plugin) ====================
   browserless:
+    # Disabled 2026-10-19: no autostart. Enable with: docker compose --profile disabled up -d
+    profiles: ["disabled"]
+    restart: "no"
     image: ghcr.io/browserless/chromium:latest
     container_name: browserless
-    restart: unless-stopped
     environment:
       - TIMEOUT=9600000
       - CONCURRENT=5
@@ -113,9 +119,11 @@ services:
 
   # ==================== Telegram MCP Sidecar ====================
   telegram-mcp:
+    # Disabled 2026-10-19: no autostart. Enable with: docker compose --profile disabled up -d
+    profiles: ["disabled"]
+    restart: "no"
     build: ./telegram-mcp
     container_name: telegram-mcp
-    restart: unless-stopped
     ports:
       - "8932:8932"
     dns:

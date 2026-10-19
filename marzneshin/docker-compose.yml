@@ -1,7 +1,9 @@
 services:
   marzneshin:
     image: dawsh/marzneshin:latest
-    restart: always
+    # Disabled 2026-10-19: no autostart. Enable with: docker compose --profile disabled up -d <service>
+    profiles: ["disabled"]
+    restart: "no"
     env_file: .env
     network_mode: host
     volumes:
@@ -21,7 +23,9 @@ services:
   marznode:
     image: dawsh/marznode:latest
     container_name: marznode-home
-    restart: always
+    # Disabled 2026-10-19: no autostart. Enable with: docker compose --profile disabled up -d <service>
+    profiles: ["disabled"]
+    restart: "no"
     network_mode: host
     environment:
       SERVICE_ADDRESS: "0.0.0.0"
@@ -41,7 +45,9 @@ services:
 
   marzneshin-db:
     image: mariadb:10.11
-    restart: always
+    # Disabled 2026-10-19: no autostart. Enable with: docker compose --profile disabled up -d <service>
+    profiles: ["disabled"]
+    restart: "no"
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-marzneshin_root_pass}
       MYSQL_DATABASE: marzneshin

@@ -1,8 +1,10 @@
 services:
   api:
+    # Disabled 2026-10-19: no autostart. Enable with: docker compose --profile disabled up -d
+    profiles: ["disabled"]
+    restart: "no"
     container_name: LibreChat
     image: registry.librechat.ai/danny-avila/librechat-dev:latest
-    restart: always
     user: "${UID:-1000}:${GID:-1000}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -28,9 +30,11 @@ services:
       - default
 
   mongodb:
+    # Disabled 2026-10-19: no autostart. Enable with: docker compose --profile disabled up -d
+    profiles: ["disabled"]
+    restart: "no"
     container_name: chat-mongodb
     image: mongo:8.0.20
-    restart: always
     # User mapping for proper permissions handling in Linux
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
@@ -38,9 +42,11 @@ services:
     command: mongod --noauth
 
   meilisearch:
+    # Disabled 2026-10-19: no autostart. Enable with: docker compose --profile disabled up -d
+    profiles: ["disabled"]
+    restart: "no"
     container_name: chat-meilisearch
     image: getmeili/meilisearch:v1.35.1
-    restart: always
     user: "${UID:-1000}:${GID:-1000}"
     environment:
       - MEILI_HOST=http://meilisearch:7700
@@ -50,29 +56,36 @@ services:
       - ./meili_data:/meili_data
 
   vectordb:
+    # Disabled 2026-10-19: no autostart. Enable with: docker compose --profile disabled up -d
+    profiles: ["disabled"]
+    restart: "no"
     container_name: chat-vectordb
     image: pgvector/pgvector:0.8.0-pg15-trixie
     environment:
       POSTGRES_DB: mydatabase
       POSTGRES_USER: myuser
       POSTGRES_PASSWORD: mypassword
-    restart: always
     volumes:
       - vectordb_data:/var/lib/postgresql/data
 
   rag_api:
+    # Disabled 2026-10-19: no autostart. Enable with: docker compose --profile disabled up -d
+    profiles: ["disabled"]
+    restart: "no"
     container_name: chat-rag_api
     image: registry.librechat.ai/danny-avila/librechat-rag-api-dev-lite:latest
     environment:
       - DB_HOST=vectordb
       - RAG_PORT=${RAG_PORT:-8000}
-    restart: always
     depends_on:
       - vectordb
     env_file:
       - .env
 
   code-interpreter-api:
+    # Disabled 2026-10-19: no autostart. Enable with: docker compose --profile disabled up -d
+    profiles: ["disabled"]
+    restart: "no"
     image: ghcr.io/usnavy13/librecodeinterpreter:main
     deploy:
       resources:
@@ -80,7 +93,6 @@ services:
           memory: 3G
     pull_policy: always
     container_name: chat-code-interpreter-api
-    restart: unless-stopped
     init: true
     cap_add:
       - SYS_ADMIN
@@ -103,9 +115,11 @@ services:
         condition: service_completed_successfully
 
   code-interpreter-redis:
+    # Disabled 2026-10-19: no autostart. Enable with: docker compose --profile disabled up -d
+    profiles: ["disabled"]
+    restart: "no"
     image: redis:7-alpine
     container_name: chat-code-interpreter-redis
-    restart: unless-stopped
     command: >
       redis-server
       --appendonly yes
@@ -121,9 +135,11 @@ services:
       retries: 5
 
   code-interpreter-minio:
+    # Disabled 2026-10-19: no autostart. Enable with: docker compose --profile disabled up -d
+    profiles: ["disabled"]
+    restart: "no"
     image: minio/minio:latest
     container_name: chat-code-interpreter-minio
-    restart: unless-stopped
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -137,6 +153,9 @@ services:
       retries: 5
 
   code-interpreter-minio-init:
+    # Disabled 2026-10-19: no autostart. Enable with: docker compose --profile disabled up -d
+    profiles: ["disabled"]
+    restart: "no"
     image: minio/mc:latest
     depends_on:
       code-interpreter-minio:
