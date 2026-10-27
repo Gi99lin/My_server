@@ -42,6 +42,13 @@ Then add the matching Proxy Hosts in NPM. Full runbook (DNS, NPM, phases) lives 
 
 ## 🤖 AI & LLM Ecosystem
 
+Feature documentation and coverage: [`docs/features/INDEX.md`](./docs/features/INDEX.md).
+The proposed personal Claude SDK service is documented in the
+[architecture draft](./docs/superpowers/specs/2026-10-27-claude-sdk-host-design.md).
+Its [prior-art review](./docs/superpowers/specs/2026-10-27-claude-sdk-prior-art.md)
+compares existing hosting, browser, secret-handling and proxy implementations.
+It is a design only; no SDK host is deployed by this repository yet.
+
 ### OpenClaw (Multi-Agent System)
 Personal AI assistant framework with persistent memory, multi-agent orchestration, and Telegram bots (Dev Team, QA, FinAnalyst, etc.).
 - **Location**: [`openclaw/`](./openclaw)
