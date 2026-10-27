@@ -16,15 +16,15 @@ The owner approved the unified executor architecture and requested Antigravity C
 
 ## Cycle 1
 
-State: preparing contracts and lane worktrees. Coordinator reproduced `agy --version` = 1.4.8 and Gemini 3.8 availability; no application code existed at baseline.
+State: initial Antigravity attempts stopped by normal permission checks before code; explicit owner approval for blanket bypass is pending. Coordinator has implemented independent configuration/authentication/journal producers and manually verified them. Coordinator reproduced `agy --version` = 1.4.8 and Gemini 3.8 availability; no application code existed at baseline.
 
 Codex usage at start: 61% of 5-hour window, 57% of weekly window; Antigravity exposes models but no equivalent quota has been established. Do not invent quota figures.
 
 | Lane | Runtime/model | Ownership | State |
 | --- | --- | --- | --- |
-| runtime | Antigravity / Gemini 3.8 Flash Medium | SDK lifecycle, usage | pending launch |
-| browser | Antigravity / Gemini 3.8 Flash Medium | Toolkit, credential grant, evidence, submission | pending launch |
-| deploy | Antigravity / Gemini 3.8 Flash Medium | Docker, namespace guard, proxy, runbook | pending launch |
+| runtime | Antigravity / Gemini 3.8 Flash Medium | SDK lifecycle, usage | initial run stopped: permission not granted |
+| browser | Antigravity / Gemini 3.8 Flash Medium | Toolkit, credential grant, evidence, submission | initial run stopped: permission not granted |
+| deploy | Antigravity / Gemini 3.8 Flash Medium | Docker, namespace guard, proxy, runbook | initial run stopped: permission not granted |
 
 ## Acceptance ledger
 
@@ -40,3 +40,10 @@ Codex usage at start: 61% of 5-hour window, 57% of weekly window; Antigravity ex
 ## Deployment prerequisites
 
 Bind upstream proxy without printing credentials; register application tokens and internal TLS provider certificate; verify official owner login; review any TMS migration; run real model usage and tunnel checks before go-live. None is implicitly satisfied by a deterministic local runner.
+
+## Cycle 1 preliminary evidence
+
+- Managed detached nohup processes did not survive the execution harness; foreground managed sessions preserved CLI lifetime. No application code was produced by those attempts.
+- Antigravity reported `--mode auto is not available for this account; continuing in the default mode.` Default mode denied runtime/deploy shell commands and browser source reading. Their result status was SUCCESS despite `denied_actions` and no code; those runs are not accepted as implementation.
+- Permission question for `--dangerously-skip-permissions` is pending; no bypass flag has been used. Logs remain outside Git.
+- Coordinator manual configuration/auth/journal probe passed: invalid scope denied, cross-application lookup returned 404, request key repeated without duplicate creation, agent budget excluded cache reads, content canary absent from journal projections, restart marked active session interrupted. No automated suite added.
