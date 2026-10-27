@@ -206,6 +206,7 @@ class BrowserToolkit:
         session: BrowserSession | None = None,
         action_timeout_ms: int = 10_000,
         check_active_cb: Callable[[], Awaitable[None]] | None = None,
+        http_credentials: tuple[str, str] | None = None,
     ) -> None:
         self._stand = stand
         self._evidence = evidence
@@ -213,13 +214,15 @@ class BrowserToolkit:
         self._check_active_cb = check_active_cb
 
         self._address, basic_auth = split_address(stand.address)
+        auth = http_credentials or basic_auth
         self.session = session or BrowserSession(
-            self._address, action_timeout_ms=action_timeout_ms, http_credentials=basic_auth
+            self._address, action_timeout_ms=action_timeout_ms, http_credentials=auth
         )
         self._lock = asyncio.Lock()
         self._typed_echoes: set[str] = set()
-        for part in basic_auth or ():
-            self._typed_echoes |= echo_variants(part)
+        for part in auth or ():
+            if part:
+                self._typed_echoes |= echo_variants(part)
 
         self._handlers: dict[str, Callable[[dict[str, Any]], Awaitable[str]]] = {
             "open_url": self._open_url,
@@ -240,10 +243,10 @@ class BrowserToolkit:
         arguments = arguments if isinstance(arguments, dict) else {}
         handler = self._handlers.get(name)
         async with self._lock:
-            try:
-                if self._check_active_cb is not None:
-                    await self._check_active_cb()
+            if self._check_active_cb is not None:
+                await self._check_active_cb()
 
+            try:
                 if handler is None:
                     raise ToolRefusal(f"Неизвестный инструмент: {name}")
                 if self.session.broken():

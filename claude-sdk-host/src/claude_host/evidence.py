@@ -9,9 +9,13 @@ from __future__ import annotations
 
 import base64
 import logging
+import ssl
 from collections.abc import Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Protocol
+
+from .credentials import should_bypass_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +45,16 @@ class McpEvidenceSink:
         url: str,
         token: str,
         *,
+        ca_file: str | Path | None = None,
+        proxy_url: str | None = None,
+        proxy_bypass: list[str] | None = None,
         client_factory: Callable[[dict[str, str]], Any] | None = None,
     ) -> None:
         self._url = url
         self._token = token
+        self._ca_file = str(ca_file) if ca_file else None
+        self._proxy_url = proxy_url
+        self._proxy_bypass = [p.strip().lower() for p in (proxy_bypass or []) if p.strip()]
         self._client_factory = client_factory
 
     def __repr__(self) -> str:
@@ -61,11 +71,23 @@ class McpEvidenceSink:
         from mcp.client.streamable_http import streamable_http_client
 
         headers = {"Authorization": f"PrivateToken {self._token}"}
-        client = (
-            self._client_factory(headers)
-            if self._client_factory
-            else http_mod.AsyncClient(headers=headers, timeout=http_mod.Timeout(CALL_TIMEOUT_SECONDS))
-        )
+        if self._client_factory:
+            client = self._client_factory(headers)
+        else:
+            if self._ca_file:
+                verify: Any = ssl.create_default_context(cafile=self._ca_file)
+            else:
+                verify = ssl.create_default_context()
+            bypass = should_bypass_proxy(self._url, self._proxy_bypass)
+            proxy = None if bypass else self._proxy_url
+            client = http_mod.AsyncClient(
+                headers=headers,
+                verify=verify,
+                proxy=proxy,
+                follow_redirects=False,
+                trust_env=False,
+                timeout=http_mod.Timeout(CALL_TIMEOUT_SECONDS),
+            )
         async with client:
             async with streamable_http_client(self._url, http_client=client) as (read_stream, write_stream):
                 async with ClientSession(read_stream, write_stream) as session:
