@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "comment": "Example configuration for Claude SDK Host. Secret files must reside outside repository.",
+  "auth_dir": "/var/lib/claude-auth",
+  "journal_path": "/var/lib/claude-host/journal.db",
+  "work_dir": "/tmp/claude-host",
+  "proxy_url": "http://172.31.240.35:8080",
+  "proxy_bypass": [
+    "localhost",
+    "127.0.0.1",
+    "172.31.240.0/28",
+    "172.31.240.16/28"
+  ],
+  "models": {
+    "claude-personal-default": "claude-3-5-sonnet-20241022",
+    "claude-sonnet": "claude-3-5-sonnet-20241022",
+    "claude-haiku": "claude-3-5-haiku-20241022"
+  },
+  "applications": [
+    {
+      "id": "tms-app",
+      "owner": "operator@example.internal",
+      "token_file": "/run/secrets/apps/tms-app.token",
+      "scopes": [
+        "completion",
+        "session:create",
+        "session:read",
+        "session:cancel"
+      ],
+      "models": [
+        "claude-personal-default",
+        "claude-sonnet",
+        "claude-haiku"
+      ],
+      "mcp_endpoints": [
+        "http://172.31.240.20:8000/sse"
+      ]
+    }
+  ],
+  "credential_providers": {
+    "tms-credentials": {
+      "url": "https://172.31.240.21:8443",
+      "token_file": "/run/secrets/providers/tms-credentials.token",
+      "ca_file": "/run/secrets/providers/tms-credentials-ca.crt"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+# ==============================================================================
+# Optional Loopback Debug Overlay
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d
+#
+# Binds port 8080 ONLY to the host loopback interface (127.0.0.1) for local inspection.
+# Never publish to 0.0.0.0 or external interfaces.
+# ==============================================================================
+
+services:
+  sdk-netguard:
+    ports:
+      - "127.0.0.1:8080:8080"

@@ -1,0 +1,206 @@
+# ==============================================================================
+# Claude SDK Host Stack
+#
+# Three-service layout:
+# 1. sdk-netguard: Namespace owner with NET_ADMIN and atomic nftables default-drop
+# 2. claude-sdk-host: Unprivileged API & SDK/browser executor (network_mode: service:sdk-netguard)
+# 3. sdk-egress: Internal forwarder enforcing mandatory upstream proxy chaining (no direct egress)
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Network Namespace Guard (Namespace Owner)
+  # ----------------------------------------------------------------------------
+  sdk-netguard:
+    build:
+      context: .
+      dockerfile: deploy/netguard/Dockerfile
+    image: claude-sdk-netguard:local
+    container_name: claude-sdk-netguard
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      sdk_clients:
+        ipv4_address: ${NETGUARD_CLIENTS_IP:-172.31.240.2}
+      sdk_tools:
+        ipv4_address: ${NETGUARD_TOOLS_IP:-172.31.240.18}
+      sdk_proxy:
+        ipv4_address: ${NETGUARD_PROXY_IP:-172.31.240.34}
+    environment:
+      CLIENTS_SUBNET: ${SDK_CLIENTS_SUBNET:-172.31.240.0/28}
+      TOOLS_SUBNET: ${SDK_TOOLS_SUBNET:-172.31.240.16/28}
+      PROXY_IP: ${EGRESS_PROXY_IP:-172.31.240.35}
+      PROXY_PORT: 8080
+      API_PORT: 8080
+      ALLOWED_INTERNAL_IPS: ${ALLOWED_INTERNAL_IPS:-172.31.240.20,172.31.240.21}
+      ALLOWED_INTERNAL_PORTS: ${ALLOWED_INTERNAL_PORTS:-8000,8443}
+    healthcheck:
+      test: ["CMD", "nft", "list", "table", "inet", "netguard"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 2s
+
+  # ----------------------------------------------------------------------------
+  # 2. Claude SDK Host (API, Session Supervisor, Chromium & SDK Executor)
+  # ----------------------------------------------------------------------------
+  claude-sdk-host:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: claude-sdk-host:local
+    container_name: claude-sdk-host
+    restart: unless-stopped
+    network_mode: "service:sdk-netguard"
+    depends_on:
+      sdk-netguard:
+        condition: service_healthy
+      sdk-egress:
+        condition: service_healthy
+    init: true
+    ipc: private
+    shm_size: ${HOST_SHM_SIZE:-512m}
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:deploy/seccomp/chromium.json
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    deploy:
+      resources:
+        limits:
+          cpus: "${HOST_CPUS:-2.0}"
+          memory: "${HOST_MEMORY:-4GiB}"
+          pids: ${HOST_PIDS:-512}
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      CONFIG_PATH: "/run/secrets/host-config.json"
+      CLAUDE_CONFIG_DIR: "/var/lib/claude-auth"
+      HTTP_PROXY: "http://${EGRESS_PROXY_IP:-172.31.240.35}:8080"
+      HTTPS_PROXY: "http://${EGRESS_PROXY_IP:-172.31.240.35}:8080"
+      http_proxy: "http://${EGRESS_PROXY_IP:-172.31.240.35}:8080"
+      https_proxy: "http://${EGRESS_PROXY_IP:-172.31.240.35}:8080"
+      NO_PROXY: "localhost,127.0.0.1,172.31.240.0/28,172.31.240.16/28"
+      no_proxy: "localhost,127.0.0.1,172.31.240.0/28,172.31.240.16/28"
+    secrets:
+      - source: host-config
+        target: /run/secrets/host-config.json
+        mode: 0400
+    volumes:
+      - claude-auth:/var/lib/claude-auth
+      - claude-journal:/var/lib/claude-host
+    tmpfs:
+      - /tmp/claude-host:size=256M,mode=1777
+    command: ["serve"]
+    healthcheck:
+      test: ["CMD", "python", "-m", "claude_host", "check-config", "--config", "/run/secrets/host-config.json"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # ----------------------------------------------------------------------------
+  # 3. Egress Proxy Forwarder (Mandatory Upstream Chaining)
+  # ----------------------------------------------------------------------------
+  sdk-egress:
+    build:
+      context: .
+      dockerfile: deploy/egress/Dockerfile
+    image: claude-sdk-egress:local
+    container_name: claude-sdk-egress
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      sdk_proxy:
+        ipv4_address: ${EGRESS_PROXY_IP:-172.31.240.35}
+      sdk_upstream:
+        ipv4_address: ${EGRESS_UPSTREAM_IP:-172.31.240.50}
+    secrets:
+      - source: gost-config
+        target: /run/secrets/gost-config.json
+        mode: 0400
+    environment:
+      CONFIG_FILE: "/run/secrets/gost-config.json"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8080 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 2s
+
+# ==============================================================================
+# Dedicated Isolated Networks (Non-overlapping /28 subnets)
+# ==============================================================================
+networks:
+  # Internal: API callers (TMS backend/worker) to netguard API listener
+  sdk_clients:
+    name: claude_sdk_clients
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SDK_CLIENTS_SUBNET:-172.31.240.0/28}
+          gateway: ${SDK_CLIENTS_GATEWAY:-172.31.240.1}
+
+  # Internal: Registered tool, MCP, credential and stand endpoints
+  sdk_tools:
+    name: claude_sdk_tools
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SDK_TOOLS_SUBNET:-172.31.240.16/28}
+          gateway: ${SDK_TOOLS_GATEWAY:-172.31.240.17}
+
+  # Internal: netguard egress-proxy interface to sdk-egress HTTP listener
+  sdk_proxy:
+    name: claude_sdk_proxy
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SDK_PROXY_SUBNET:-172.31.240.32/28}
+          gateway: ${SDK_PROXY_GATEWAY:-172.31.240.33}
+
+  # Uplink: sdk-egress connection to the external/host upstream proxy
+  sdk_upstream:
+    name: claude_sdk_upstream
+    driver: bridge
+    internal: false
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SDK_UPSTREAM_SUBNET:-172.31.240.48/28}
+          gateway: ${SDK_UPSTREAM_GATEWAY:-172.31.240.49}
+
+# ==============================================================================
+# Persistent Named Volumes
+# ==============================================================================
+volumes:
+  # Restricted official Claude authentication state
+  claude-auth:
+    name: claude_sdk_auth
+  # SQLite durable journal and accounting database
+  claude-journal:
+    name: claude_sdk_journal
+
+# ==============================================================================
+# Secret Declarations
+# ==============================================================================
+secrets:
+  host-config:
+    file: ${HOST_CONFIG_PATH:-./config.example.json}
+  gost-config:
+    file: ${GOST_CONFIG_PATH:-./deploy/egress/gost.example.json}
