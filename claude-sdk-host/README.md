@@ -15,7 +15,7 @@ Four dedicated Docker networks separate callers, registered internal peers, the 
 1. Copy `.env.example` to `.env`; choose non-overlapping networks and the numeric upstream proxy IP/port.
 2. Create `HOST_SECRETS_DIR` **outside Git**, with `host-config.json` based on `config.example.json`, `gost-config.json` based on `deploy/egress/gost.example.json`, and the referenced application/provider/idempotency secret files. Generate independent random values of at least 24 characters. Never use example tokens in a running installation.
 3. Set ownership of the mounted directory and its children to UID/GID 1000; directories require mode `0700`, secret files `0600`. Provider CA certificates can be public, but tokens and GOST URLs can contain credentials. The directory must be traversable by the container's UID.
-4. Register the exact MCP URL, HTTPS credential provider, model aliases, internal peer IPs/ports and bypass names. Attach TMS or its internal TLS gateway to the corresponding Docker networks; the default addresses are examples, not discovery.
+4. Register the exact MCP URL, HTTPS credential provider, model aliases, internal peer IPs/ports and bypass names. For TMS tunnel stands, also register its stable Docker relay and leased port range (default `42000-42999`). Attach TMS or its internal TLS gateway to the corresponding Docker networks; the default addresses are examples, not discovery.
 
 ```sh
 ./deploy/scripts/preflight-check.sh
@@ -69,3 +69,23 @@ uvx ruff check src
 ```
 
 This API/infra project has `ui:false`; acceptance consists of manual HTTP/SSE, SDK-message and disposable-container probes, recorded in the ledger. No browser regression suite is generated for the host. Existing TMS tests remain in the TMS repository. Secrets, prompts, browser content and generated source must never be written into acceptance reports.
+
+
+## TMS tunnel network attachment
+
+The TMS `testcase-tunnel` service must also join the host's `claude_sdk_tools` network with its registered static address (example `10.253.240.22`). Its existing SSH entry remains a TMS operation; the executor connects only to the selected reverse-forward port inside Docker. An override in the TMS Compose project can attach the existing service:
+
+```yaml
+services:
+  testcase-tunnel:
+    networks:
+      default: {}
+      claude_sdk_tools:
+        ipv4_address: 10.253.240.22
+networks:
+  claude_sdk_tools:
+    external: true
+    name: claude_sdk_tools
+```
+
+Use the same port range in TMS `STAND_TUNNEL_PORT_RANGE`, the host provider registry and the guard's internal port set. The guard accepts explicit numeric ports/ranges; it never exempts the entire Docker/RFC1918 address space. A saved `http://localhost:3000` stand is routed to the granted Docker relay port while its browser origin stays unchanged. This attachment is documented setup, not a production change performed by this task.

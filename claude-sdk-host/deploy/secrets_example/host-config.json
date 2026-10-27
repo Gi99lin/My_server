@@ -7,7 +7,8 @@
     "localhost",
     "127.0.0.1",
     "10.253.240.20",
-    "10.253.240.21"
+    "10.253.240.21",
+    "10.253.240.22"
   ],
   "models": {
     "claude-personal-default": "claude-sonnet-5-5"
@@ -38,7 +39,10 @@
     "tms": {
       "url": "https://10.253.240.21:8443/api/v1/internal/claude-host/credentials",
       "token_file": "/run/secrets/providers/tms-credentials.token",
-      "ca_file": "/run/secrets/providers/tms-credentials-ca.crt"
+      "ca_file": "/run/secrets/providers/tms-credentials-ca.crt",
+      "tunnel_host": "10.253.240.22",
+      "tunnel_port_min": 42000,
+      "tunnel_port_max": 42999
     }
   },
   "idempotency_key_file": "/run/secrets/idempotency.key",

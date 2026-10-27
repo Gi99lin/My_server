@@ -58,6 +58,8 @@ Completion usage is `prompt_tokens = input + cache_creation + cache_read`, `comp
 
 The host constructs the `PrivateToken` header. `attach_evidence` on the remote MCP is hidden from the model; the local browser tool calls it with real evidence. MCP URLs must exactly match the operator registry. Only HTTP MCP and the fixed five execution tools are accepted. Clients cannot supply SDK options, stdio servers, commands, environment, working directories or built-in tools.
 
+A tunnel lease may redeem to `tunnel:{"port":42001}` from the trusted credential provider. The HTTP caller cannot supply a relay host or rewrite target. The operator registers the relay under that provider (`tunnel_host`, `tunnel_port_min`, `tunnel_port_max`); TMS binds the port to the stand and live grant. A localhost browser origin is usable only with this valid mapping. The browser retains its original origin for cookies, Host and HTTPS verification; non-stand external traffic still uses the fixed upstream proxy.
+
 For `profile:"tms-authoring"`, use `mcp_servers:[]`, `max_turns <=120`, and:
 
 ```json

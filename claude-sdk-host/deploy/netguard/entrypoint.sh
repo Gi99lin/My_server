@@ -45,6 +45,21 @@ validate_port() {
     fi
 }
 
+validate_internal_port() {
+    local val="$1"
+    if [[ "$val" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+        local first="${BASH_REMATCH[1]}" last="${BASH_REMATCH[2]}"
+        validate_port "$first" "internal range start"
+        validate_port "$last" "internal range end"
+        if [ "$first" -gt "$last" ]; then
+            echo "[netguard] FATAL: Invalid internal port range" >&2
+            exit 1
+        fi
+    else
+        validate_port "$val" "internal port"
+    fi
+}
+
 RULES_FILE="/tmp/nftables.rules"
 
 if [ "$ROLE" = "host" ]; then
@@ -87,7 +102,7 @@ if [ "$ROLE" = "host" ]; then
         for p in "${PORT_ARRAY[@]}"; do
             p_trimmed=$(echo "$p" | tr -d '[:space:]')
             if [ -n "$p_trimmed" ]; then
-                validate_port "$p_trimmed" "ALLOWED_INTERNAL_PORTS item"
+                validate_internal_port "$p_trimmed"
                 if [ -z "$INTERNAL_PORT_ELEMENTS" ]; then
                     INTERNAL_PORT_ELEMENTS="$p_trimmed"
                 else
@@ -124,6 +139,7 @@ EOF
         cat <<EOF >> "$RULES_FILE"
     set allowed_internal_ports {
         type inet_service
+        flags interval
         elements = { $INTERNAL_PORT_ELEMENTS }
     }
 EOF

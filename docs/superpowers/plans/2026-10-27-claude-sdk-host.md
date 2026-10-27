@@ -40,57 +40,62 @@ Deployment producer: Dockerfile builds from `claude-sdk-host/`, installs package
 
 ## Task 1 — establish approved contract and isolated lanes
 
-- [ ] Save plan, ownership charter, status ledger and immutable producer interfaces; mark the requirement approved from the owner's message.
-- [ ] Commit only task-owned files. Leave the user's untracked `gost-proxy/` and existing `AGENTS.md` in the original checkout untouched.
-- [ ] Create three worktrees and run Antigravity CLI with `gemini-3.8-flash-medium`, one committed report per lane, 60-minute hard limit.
+- [x] Save plan, ownership charter, status ledger and immutable producer interfaces; mark the requirement approved from the owner's message.
+- [x] Commit only task-owned files. Leave the user's untracked `gost-proxy/` and existing `AGENTS.md` in the original checkout untouched.
+- [x] Create three worktrees and run Antigravity CLI with `gemini-3.8-flash-medium`, one committed report per lane, 60-minute hard limit.
 
 ## Task 2 — SDK process and usage producer (lane runtime)
 
 **Files:** `src/claude_host/runtime.py`, `usage.py`.
 
-- [ ] Implement official SDK query, strict options, text-only delta mapping, constructed child environment, bounded cancellation and result/error settlement.
-- [ ] Implement message-ID deduplication across assistant/partial/final events; preserve raw four counters and agent-vs-completion budget totals.
-- [ ] Manually drive representative message streams and cancellation; report exact commands and observed counts. No live paid model calls.
-- [ ] Commit producer and report. Coordinator checks options and counter semantics before consumers start.
+- [x] Implement official SDK query, strict options, text-only delta mapping, constructed child environment, bounded cancellation and result/error settlement.
+- [x] Implement message-ID deduplication across assistant/partial/final events; preserve raw four counters and agent-vs-completion budget totals.
+- [x] Manually drive representative message streams and cancellation; report exact commands and observed counts. No live paid model calls.
+- [x] Commit producer and report. Coordinator checks options and counter semantics before consumers start.
 
 ## Task 3 — browser, credentials and submission producer (lane browser)
 
 **Files:** `src/claude_host/browser_tools.py`, `browser.py`, `credentials.py`, `evidence.py`, `submission.py`, `sdk_tools.py`.
 
-- [ ] Adapt the owner's existing framework-neutral TMS toolkit, retaining nine operations and origin/secret/evidence rules without importing TMS database/keyring.
-- [ ] Add one-use HTTPS credential redemption, pre-tool active grant checks, no redirects and fail-closed cleanup.
-- [ ] Add trusted in-process SDK tools and one accepted source contract; preserve secret and credential-literal refusal.
-- [ ] Use explicit Chromium proxy, sandbox, private profile and clean process lifecycle. Manually inspect refused secret/origin cases; commit with report.
+- [x] Adapt the owner's existing framework-neutral TMS toolkit, retaining nine operations and origin/secret/evidence rules without importing TMS database/keyring.
+- [x] Add one-use HTTPS credential redemption, pre-tool active grant checks, no redirects and fail-closed cleanup.
+- [x] Add trusted in-process SDK tools and one accepted source contract; preserve secret and credential-literal refusal.
+- [x] Use explicit Chromium proxy, sandbox, private profile and clean process lifecycle. Manually inspect refused secret/origin cases; commit with report.
 
 ## Task 4 — Docker network and packaging producer (lane deploy)
 
 **Files:** Dockerfile, `.dockerignore`, Compose, `deploy/`, `.env.example`, `config.example.json`, service README.
 
-- [ ] Provide pinned browser/SDK runtime image, non-root/init/private IPC, secret mounts and conservative resource limits.
-- [ ] Configure mandatory existing proxy chain and independent IPv4/IPv6 namespace policy; no raw Docker DNS fallback, direct route or host port by default.
-- [ ] Verify Compose interpolation and shell syntax without starting Docker. Commit report. Coordinator alone builds/runs a disposable stack and checks no-fallback behavior.
+- [x] Provide pinned browser/SDK runtime image, non-root/init/private IPC, secret mounts and conservative resource limits.
+- [x] Configure mandatory existing proxy chain and independent IPv4/IPv6 namespace policy; no raw Docker DNS fallback, direct route or host port by default.
+- [x] Verify Compose interpolation and shell syntax without starting Docker. Commit report. Coordinator alone builds/runs a disposable stack and checks no-fallback behavior.
 
 ## Task 5 — API, durable sessions and orchestration (coordinator, after 2–4)
 
 **Files:** package metadata, `config.py`, `auth.py`, `api.py`, `sessions.py`, `journal.py`, `__main__.py`.
 
-- [ ] Validate secret-file config, application scopes/models/endpoints and request sizes; reject unsupported fields, arbitrary env/cwd/stdio/tool settings.
-- [ ] Provide chat and prompt completion APIs/SSE plus models/capabilities; stable schemas and explicit SDK semantic limitations.
-- [ ] Provide app-scoped session create/read/events/ack/cancel, durable request idempotency/usage, finite queues, deadlines, consumer leases and memory-only source replay.
-- [ ] Supervise SDK/browser lifecycle, enforce remaining budgets, mark restart interruptions and expose incomplete accounting.
-- [ ] Run manual HTTP probes through actual ASGI endpoints using a deterministic injected runner; no mocked route implementation and no committed automated suite.
+- [x] Validate secret-file config, application scopes/models/endpoints and request sizes; reject unsupported fields, arbitrary env/cwd/stdio/tool settings.
+- [x] Provide chat and prompt completion APIs/SSE plus models/capabilities; stable schemas and explicit SDK semantic limitations.
+- [x] Provide app-scoped session create/read/events/ack/cancel, durable request idempotency/usage, finite queues, deadlines, consumer leases and memory-only source replay.
+- [x] Supervise SDK/browser lifecycle, enforce remaining budgets, mark restart interruptions and expose incomplete accounting.
+- [x] Run manual HTTP probes through actual ASGI endpoints using a deterministic injected runner; no mocked route implementation and no committed automated suite.
 
 ## Task 6 — TMS producer/consumer integration (separate isolated TMS branch)
 
-- [ ] Recheck canonical TMS master and run its acceptance preflight before delegation; preserve current direct SDK switch as required by TMS instructions.
-- [ ] Add an explicit remote-host backend selection, creator guard, remote execution/author adapters and HTTPS credential-grant endpoints with job/stand checks.
-- [ ] Persist host usage deduplication atomically with TMS counters using existing appropriate state or a reviewed schema change. Never apply a production migration automatically.
-- [ ] Integrate supported completion fields, leave default OpenAI path intact and make remote-host failures fail closed without direct-SDK fallback.
-- [ ] Run existing targeted/backend lint/tests and applicable TMS acceptance gates, using isolated databases. Record any migration requiring human review before deployment.
+- [x] Recheck canonical TMS master and run its acceptance preflight before delegation; preserve current direct SDK switch as required by TMS instructions.
+- [x] Add an explicit remote-host backend selection, creator guard, remote execution/author adapters and HTTPS credential-grant endpoints with job/stand checks.
+- [x] Persist host usage deduplication atomically with TMS counters using existing appropriate state or a reviewed schema change. Never apply a production migration automatically.
+- [x] Integrate supported completion fields, leave default OpenAI path intact and make remote-host failures fail closed without direct-SDK fallback.
+- [x] Run existing targeted/backend lint/tests and applicable TMS acceptance gates, using isolated databases. Record any migration requiring human review before deployment.
 
 ## Task 7 — integration acceptance and handoff
 
-- [ ] Review merged code for auth/secrets/concurrency/security; correct concrete findings once, then rerun affected gates.
-- [ ] Build pinned images; exercise HTTP API, Chromium sandbox, internal stand routing, direct DNS/IPv4/IPv6/UDP denial and upstream failure in a disposable local stack.
-- [ ] Exercise real official SDK message/usage behavior only with an authorized official login; absent login is a clearly recorded go-live prerequisite, not replaced by invented usage evidence.
-- [ ] Update feature docs/runbooks/status, record commits and manual evidence; provide implementation result without claiming deployment or unsupported real-model checks.
+- [x] Review merged code for auth/secrets/concurrency/security; correct concrete findings once, then rerun affected gates.
+- [x] Build pinned images; exercise HTTP API, Chromium sandbox, internal stand routing, direct DNS/IPv4/IPv6/UDP denial and upstream failure in a disposable local stack.
+- [ ] Release gate: exercise real official SDK message/usage behavior only with an authorized official login; absent login is a clearly recorded go-live prerequisite, not replaced by invented usage evidence.
+- [x] Update feature docs/runbooks/status, record commits and manual evidence; provide implementation result without claiming deployment or unsupported real-model checks.
+
+
+## Final integration outcome
+
+Implementation and local acceptance are complete on the recorded frozen branches. The current TMS snapshot includes cycle 83 and its tunnel transport; the producer/consumer now carry a grant-bound port to an operator-registered relay. Full backend: 2768 passed, 24 skipped, 0 failed. Frontend: 174 component files passed, lint/types/build passed. Actual guarded Chromium, direct-egress denial, synthetic parent outage, sync/SSE/client compatibility, source/accounting replay and worker failure probes passed. Live owner-login/model/server/tunnel/actual-exit checks remain explicit release gates. Documentation generation was attempted but the external QA Lab generator reset the connection. No production action was performed.

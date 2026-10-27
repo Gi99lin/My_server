@@ -690,6 +690,9 @@ class SDKRunner:
                         kind="rate_limit",
                         data={"status": status_val, "resets_at": resets_at_val},
                     )
+                    if status_val == "rejected":
+                        state, stop_reason = "failed", "rate_limited"
+                        break
 
                 # 4. ResultMessage
                 elif is_result_message:

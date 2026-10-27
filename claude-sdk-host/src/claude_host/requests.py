@@ -94,7 +94,8 @@ class AgentRequest(StrictRequest):
                 raise RunFailure("mcp_endpoint_not_allowed", 403)
             if len(set(server.tools)) != len(server.tools) or set(server.tools) != execution_tools:
                 raise RunFailure("mcp_tools_not_allowed", 400)
-            if not server.token.get_secret_value() or len(server.token.get_secret_value()) > 4096:
+            token = server.token.get_secret_value()
+            if not token or len(token) > 4096 or any(ord(char) < 33 or ord(char) > 126 for char in token):
                 raise RunFailure("invalid_mcp_token", 400)
 
     def private_payload(self) -> dict:

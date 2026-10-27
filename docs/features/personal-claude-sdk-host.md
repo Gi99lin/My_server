@@ -47,6 +47,7 @@ The owner connects personally used applications to one private Claude Agent SDK 
 
 - Every connection outside registered attached Docker peers goes through the configured proxy. Turning off proxy variables or losing the proxy never permits direct external access.
 - SDK and browser external traffic share the executor's enforced proxy boundary; registered internal stand/tunnel traffic remains direct.
+- A tunneled stand keeps its saved browser origin, including a localhost origin. Redemption supplies only its bound tunnel port; the operator chooses the registered Docker relay and allowed port range. Missing or changed tunnel mapping fails closed before the browser starts. External resources continue through the mandatory proxy.
 - Credential leases are single-use, bound to the application/job/attempt and exact stand origin, and must be redeemed within 60 seconds. Values remain only in trusted session-tool memory; they are never placed in model messages or the CLI environment.
 - Completion sessions have one model turn and no tools. Unsupported options, including `temperature`, return 400 with `unsupported_parameter`.
 - Agent execution uses one SDK session per run; authoring uses one per case attempt. Remaining authoring job budgets span cases and retries.

@@ -51,8 +51,8 @@ services:
       PROXY_IP: ${EGRESS_PROXY_IP:-10.253.240.35}
       PROXY_PORT: 8080
       API_PORT: 8080
-      ALLOWED_INTERNAL_IPS: ${ALLOWED_INTERNAL_IPS:-10.253.240.20,10.253.240.21}
-      ALLOWED_INTERNAL_PORTS: ${ALLOWED_INTERNAL_PORTS:-8000,8443}
+      ALLOWED_INTERNAL_IPS: ${ALLOWED_INTERNAL_IPS:-10.253.240.20,10.253.240.21,10.253.240.22}
+      ALLOWED_INTERNAL_PORTS: ${ALLOWED_INTERNAL_PORTS:-8000,8443,42000-42999}
     healthcheck:
       test: ["CMD", "nft", "list", "table", "inet", "netguard"]
       interval: 5s
@@ -101,8 +101,8 @@ services:
       HTTPS_PROXY: "http://${EGRESS_PROXY_IP:-10.253.240.35}:8080"
       http_proxy: "http://${EGRESS_PROXY_IP:-10.253.240.35}:8080"
       https_proxy: "http://${EGRESS_PROXY_IP:-10.253.240.35}:8080"
-      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,10.253.240.20,10.253.240.21}"
-      no_proxy: "${NO_PROXY:-localhost,127.0.0.1,10.253.240.20,10.253.240.21}"
+      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,10.253.240.20,10.253.240.21,10.253.240.22}"
+      no_proxy: "${NO_PROXY:-localhost,127.0.0.1,10.253.240.20,10.253.240.21,10.253.240.22}"
     volumes:
       - ${HOST_SECRETS_DIR:?Set HOST_SECRETS_DIR to an operator-owned directory outside Git}:/run/secrets:ro
       - claude-network-state:/run/netguard:ro
@@ -113,7 +113,7 @@ services:
       - /tmp/claude-host:size=256M,mode=1777
     command: ["serve"]
     healthcheck:
-      test: ["CMD", "python", "-m", "claude_host", "check-config", "--config", "/run/secrets/host-config.json"]
+      test: ["CMD", "python", "-c", "import json,urllib.request; o=urllib.request.build_opener(urllib.request.ProxyHandler({})); assert json.load(o.open('http://127.0.0.1:8080/health/live',timeout=2))['status']=='ok'"]
       interval: 10s
       timeout: 5s
       retries: 3

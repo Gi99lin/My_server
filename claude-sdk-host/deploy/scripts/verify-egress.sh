@@ -1,97 +1,53 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Explicit operator-triggered network check. No model query or auth-header logging.
+CONTAINER="${CONTAINER:-claude-sdk-host}"
+PROBE_URL="${PROBE_URL:-https://api.ipify.org}"
+EXPECTED_EXIT_IP="${EXPECTED_EXIT_IP:-}"
+docker exec -i -e "PROBE_URL=$PROBE_URL" -e "EXPECTED_EXIT_IP=$EXPECTED_EXIT_IP" "$CONTAINER" python - <<'PY'
+import ipaddress,json,os,socket,sys,urllib.request
+from pathlib import Path
+from urllib.parse import urlsplit
 
-# ==============================================================================
-# deploy/scripts/verify-egress.sh
-# Manual egress acceptance verification test runner for live disposable stack.
-#
-# Covers:
-# - NET-01: Outgoing traffic exits through proxy; returns upstream-observed IP
-# - NET-02: Direct external IPv4/IPv6, UDP/QUIC, metadata fail closed
-# - NET-03: External DNS (UDP/TCP 53) and Docker DNS (127.0.0.11) dropped; static peers work
-# ==============================================================================
+def fail(code):
+    print('FAIL '+code,file=sys.stderr)
+    raise SystemExit(1)
 
-echo "=== Claude SDK Host: Manual Egress Acceptance Probes ==="
-
-CONTAINER="claude-sdk-host"
-
-if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER}$"; then
-    echo "ERROR: Container '$CONTAINER' is not running." >&2
-    echo "This script is designed for live manual acceptance verification." >&2
-    exit 1
-fi
-
-echo "Running probe suite inside $CONTAINER..."
-
-# ------------------------------------------------------------------------------
-# Test 1: NET-01 - External HTTP/HTTPS works via proxy
-# ------------------------------------------------------------------------------
-echo ""
-echo "[NET-01] Testing outgoing HTTPS request through configured proxy..."
-EXIT_IP=$(docker exec "$CONTAINER" curl -s --max-time 10 https://api.ipify.org || true)
-if [ -n "$EXIT_IP" ]; then
-    echo "  [PASS] Request succeeded via proxy. Observed Exit IP: $EXIT_IP"
-else
-    echo "  [FAIL] Request via proxy failed or timed out." >&2
-fi
-
-# ------------------------------------------------------------------------------
-# Test 2: NET-02 - Direct external connection without proxy must fail closed
-# ------------------------------------------------------------------------------
-echo ""
-echo "[NET-02] Testing direct outbound connection (bypassing proxy)..."
-DIRECT_CODE=$(docker exec "$CONTAINER" curl --noproxy '*' -s -o /dev/null -w "%{http_code}" --max-time 5 https://1.1.1.1 2>/dev/null || echo "TIMEOUT")
-if [ "$DIRECT_CODE" = "TIMEOUT" ] || [ "$DIRECT_CODE" = "000" ]; then
-    echo "  [PASS] Direct outbound connection failed closed (timed out / rejected as required)."
-else
-    echo "  [FAIL] Direct connection succeeded with HTTP $DIRECT_CODE! Firewall leak detected!" >&2
-    exit 1
-fi
-
-# ------------------------------------------------------------------------------
-# Test 3: NET-03 - External DNS & Docker resolver 127.0.0.11 must be dropped
-# ------------------------------------------------------------------------------
-echo ""
-echo "[NET-03] Testing direct DNS resolution to 127.0.0.11 and 8.8.8.8..."
-# Docker resolver check
-DOCKER_DNS=$(docker exec "$CONTAINER" python3 -c '
-import socket
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-s.settimeout(2.0)
+config=json.loads(Path('/run/secrets/host-config.json').read_text())
+probe=os.environ['PROBE_URL'];parts=urlsplit(probe)
+if parts.scheme not in ('http','https') or not parts.hostname or parts.username or parts.password:
+    fail('invalid_probe_url')
 try:
-    s.sendto(b"\xaa\xbb\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x07example\x03com\x00\x00\x01\x00\x01", ("127.0.0.11", 53))
-    data, _ = s.recvfrom(512)
-    print("RESOLVED")
+    proxy=urllib.request.ProxyHandler({'http':config['proxy_url'],'https':config['proxy_url']})
+    with urllib.request.build_opener(proxy).open(probe,timeout=10) as response:
+        observed=str(ipaddress.ip_address(response.read(1024).decode().strip()))
 except Exception:
-    print("BLOCKED")
-' 2>/dev/null || echo "BLOCKED")
+    fail('configured_proxy_exit_unavailable')
+expected=os.environ.get('EXPECTED_EXIT_IP')
+if expected:
+    try: expected=str(ipaddress.ip_address(expected))
+    except ValueError:fail('invalid_expected_exit_ip')
+    if observed!=expected:fail('unexpected_proxy_exit')
+print('PASS configured proxy exit: '+observed+(' (matches expected)' if expected else ' (not compared to an expected address)'))
 
-if [ "$DOCKER_DNS" = "BLOCKED" ]; then
-    echo "  [PASS] Docker resolver 127.0.0.11 is blocked by nftables."
-else
-    echo "  [FAIL] Docker resolver 127.0.0.11 responded! DNS leak detected!" >&2
-    exit 1
-fi
+def deny_tcp(host,port,family=socket.AF_INET):
+    with socket.socket(family,socket.SOCK_STREAM) as stream:
+        stream.settimeout(1)
+        try:stream.connect((host,port))
+        except OSError:return
+    fail('direct_tcp_reachable')
 
-# External DNS check
-EXT_DNS=$(docker exec "$CONTAINER" python3 -c '
-import socket
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-s.settimeout(2.0)
-try:
-    s.sendto(b"\xaa\xbb\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x07example\x03com\x00\x00\x01\x00\x01", ("8.8.8.8", 53))
-    data, _ = s.recvfrom(512)
-    print("RESOLVED")
-except Exception:
-    print("BLOCKED")
-' 2>/dev/null || echo "BLOCKED")
-
-if [ "$EXT_DNS" = "BLOCKED" ]; then
-    echo "  [PASS] Direct external DNS to 8.8.8.8:53 is blocked by nftables."
-else
-    echo "  [FAIL] Direct external DNS succeeded! DNS leak detected!" >&2
-    exit 1
-fi
-
-echo ""
-echo "=== Egress Acceptance Verification Passed ==="
+for host,port in [('1.1.1.1',443),('169.254.169.254',80),('127.0.0.11',53),('8.8.8.8',53),('8.8.8.8',853)]:deny_tcp(host,port)
+deny_tcp('2606:4700:4700::1111',443,socket.AF_INET6)
+print('PASS direct IPv4/IPv6, metadata, TCP DNS and DoT denied')
+query=b'\xaa\xbb\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x07example\x03org\x00\x00\x01\x00\x01'
+for host in ('127.0.0.11','8.8.8.8'):
+    with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as stream:
+        stream.settimeout(1)
+        try:
+            stream.sendto(query,(host,53));stream.recvfrom(1024)
+        except OSError:continue
+    fail('direct_udp_dns_answered')
+print('PASS Docker and external UDP DNS denied')
+print('PASS network probes; also verify parent outage, guard restart and actual browser routing before go-live')
+PY

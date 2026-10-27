@@ -478,6 +478,8 @@ class StandTunnelProxy:
 
         for k, v in headers:
             kl = k.lower()
+            if kl == "proxy-authorization":
+                continue
             if kl == "host":
                 out_headers.append(f"{k}: {v}")
                 has_host = True

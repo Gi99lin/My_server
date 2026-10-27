@@ -1,59 +1,90 @@
 # Claude SDK host implementation status
 
-Updated: 2026-10-27. Integration branch: `codex/claude-sdk-host`; base My_server `5faded3`. TMS observed master `1dcf3918` includes track 21. No production changes or new live inference calls.
+Updated 2026-10-27. Primary branch `codex/claude-sdk-host`, base My_server `5faded3`. Implementation is local; no production server, real Claude account or proxy credentials were changed.
 
-## Read first
+## Current result
 
-The owner approved the unified executor architecture and requested Antigravity CLI/Gemini 3.8 developers. Follow [the plan](../superpowers/plans/2026-10-27-claude-sdk-host.md) and [the lane charter](2026-10-27-sdk-host-charter.md). Reports are claims until reproduced on the integrated tree.
+The private completion/session API, durable journal, process supervisor, official SDK runner, local browser/credential/submission tools and guarded Docker stack are implemented and manually exercised. A separate TMS integration branch implements generation, agent execution, authoring and scoped one-use HTTPS credentials. Current TMS cycle 83 introduced working origin-preserving stand tunnels while this task was running. Its producer was verified before the fresh browser lane started; the merged tunnel path now passes real Chromium navigation/AJAX and fixed-parent TLS/CONNECT/WebSocket probes.
 
-## Decisions
+- Host: `/Users/ivanakimkin/.codex/worktrees/claude-sdk-host/My_server`, `codex/claude-sdk-host`.
+- TMS: `/Users/ivanakimkin/Projects/ai-testcase-generator/.worktrees/sdk-host-integration`, `codex/claude-host-integration`.
+- Concrete protocol: [API contract](../../claude-sdk-host/API.md); operator steps: [service README](../../claude-sdk-host/README.md).
+- TMS implementation `12c39456`, report `a1fc9c61`; subsequently merged canonical cycle83 snapshot `7157955ab5ca` as `58d51dd42cf2`. This is a frozen integration snapshot; canonical development continues independently.
 
-- Use `gemini-3.8-flash-medium`, confirmed by `agy models`; use `--dangerously-skip-permissions` for these isolated lines, explicitly approved by the owner on 2026-10-27 after `auto` proved unavailable.
-- Use native managed worktrees for this repository; original untracked user files remain untouched. Implementation is not a production deployment.
-- No new automated suite for this non-UI API/infra project, following the owner's global rule. Manual API/container probes and existing TMS checks are required.
-- Local Docker exposes 6,210,170,880 bytes RAM; only one coordinator-owned disposable stack may run.
-- Claude SDK developers' direct SDK code in TMS remains available under its existing switch; a new explicit host backend will not silently fall back to it.
+## Decisions and scope
 
-## Cycle 1
+The owner approved the unified executor and asked for Antigravity/Gemini 3.8 developers. `agy models` confirmed `gemini-3.8-flash-medium`; `auto` was unavailable. Initial permission-limited attempts produced no accepted code. The owner then expressly authorized `--dangerously-skip-permissions` for the three prepared My_server worktrees, excluding deployment, secret inspection and server changes. Fresh conversations ran within those boundaries.
 
-State: initial Antigravity attempts stopped by normal permission checks before code; owner approved the bypass flag for these isolated lines; restarting in fresh CLI conversations. Coordinator has implemented independent configuration/authentication/journal producers and manually verified them. Coordinator reproduced `agy --version` = 1.4.8 and Gemini 3.8 availability; no application code existed at baseline.
+Permanent encrypted credentials, the master key, business state, deterministic checks and intentional retries stay in TMS. Only selected session credentials enter the trusted executor worker. The host has no API-key fallback. The existing TMS direct-SDK switch is preserved explicitly; selecting `claude-host` never silently falls back for the owner.
 
-Codex usage at start: 61% of 5-hour window, 57% of weekly window; Antigravity exposes models but no equivalent quota has been established. Do not invent quota figures.
+TMS grants and accounting receipts use the existing leased job payload under row locks. Receipt, domain counter and token usage commit together; no new TMS migration was introduced. The original immutable claimed-job ID, owner and claim attempt fence issuance/status, including a same-owner reclaim. Execution is never automatically restarted; a reclaimed authoring job requires explicit manual retry while retaining prior results/usage. A later move to dedicated indexed tables would require migration and receipt backfill.
 
-| Lane | Runtime/model | Ownership | State |
-| --- | --- | --- | --- |
-| runtime | Antigravity / Gemini 3.8 Flash Medium | SDK lifecycle, usage | relaunching with owner-approved flag |
-| browser | Antigravity / Gemini 3.8 Flash Medium | Toolkit, credential grant, evidence, submission | relaunching with owner-approved flag |
-| deploy | Antigravity / Gemini 3.8 Flash Medium | Docker, namespace guard, proxy, runbook | relaunching with owner-approved flag |
+The host defaults to one child process. Separate finite agent/completion queues are selected fairly. Queue wait consumes the supplied deadline. Auth state and journal volumes have UID1000/mode0700. The read-only application shares the guarded namespace; GOST has its own guarded namespace and can reach only the fixed parent IP/port. No host port is published by default. Default example networks use `10.253.240.0/24` split into four `/28` ranges, because the original example overlapped a real local `172.31.0.0/16` Docker network.
 
-## Acceptance ledger
+The application uses a digest-pinned official Python base and matching Playwright/Chromium 1.64.1 installed at build time. Pulling the full Playwright image was stopped after slow download; the same browser version was installed by the supported Playwright installer, without a version downgrade. The upstream Playwright seccomp profile is retained. A derived profile additionally permits only `chroot`, required after Chromium enters its user namespace when the initial namespace has no capabilities. Real sandbox startup passed; no `SYS_ADMIN`, privileged mode or `--no-sandbox` was added.
 
-| Requirement | Planned surface | Evidence | State |
-| --- | --- | --- | --- |
-| Personal official SDK auth, no API fallback | runtime/config/auth volume | official CLI smoke and options inspection | pending |
-| Completion API and strict parameters | API/runtime | manual actual-route HTTP/SSE probes | pending |
-| Browser and named secrets in executor | local tools/grants | manual origin/secret/lease probes, real Chromium | pending |
-| Execution/authoring TMS adapters | isolated TMS branch | existing targeted checks plus API contract smoke | pending |
-| Usage/replay/budgets/cancellation | meter/journal/supervisor | message-stream and lifecycle probes | pending |
-| All external egress via proxy | namespace/proxy | disposable container denial and outage probes | pending |
+## Lane review and integration corrections
 
-## Deployment prerequisites
+All three first reports required one consolidated fresh-agent correction. Reports were treated as claims and checked against actual code/probes.
 
-Bind upstream proxy without printing credentials; register application tokens and internal TLS provider certificate; verify official owner login; review any TMS migration; run real model usage and tunnel checks before go-live. None is implicitly satisfied by a deterministic local runner.
+| Boundary | Reproduced defect | Correction/evidence |
+| --- | --- | --- |
+| Runtime | Event UUID confused with provider message ID; truncated streams succeeded | Real SDK dataclass probes prove text/usage deduplication and incomplete-stream failure |
+| Runtime | Continuous events postponed grant checks | A 20ms event stream is interrupted by the five-second grant watchdog |
+| Runtime/API | Lazy SDK startup committed HTTP200 before provider failure | Advancing the real iterator and delaying headers until content/usage; actual route returns503 for pre-content failure |
+| Browser | Startup omitted real Chromium; grant/origin checks incomplete | HTTPS grant/status + real sandboxed browser + actual SDK tool registration passed |
+| Browser | Basic credentials could answer a foreign resource challenge | Exact original origin bound; real external401 challenge received no credential header |
+| Browser | PNG byte inspection missed visible text echoes | Known secret visible DOM echoes refused before screenshot; typed fields masked |
+| Submission | Character/byte limits differed | Accepted 31k Cyrillic source survives supervisor with the same 60,000-character bound |
+| Deploy | Browser version mismatch; forwarder uplink unrestricted | Matching browser installed; independent packet filter proves fixed-parent-only egress |
+| Deploy | Build paths, secret mounts, false Debug parsing | Real builds/start exposed and resolved these; GOST sees only its own config file |
+| TMS | Stale worker could adopt a replacement's lease | Original claim identity/attempt checked under lock; takeover/reclaim probe passed |
+| TMS | Cancellation dropped final usage | Bounded final durable replay charges late 7 after prior 5 exactly once; late source ignored |
 
-## Cycle 1 preliminary evidence
+## Coordinator-reproduced evidence
 
-- Managed detached nohup processes did not survive the execution harness; foreground managed sessions preserved CLI lifetime. No application code was produced by those attempts.
-- Antigravity reported `--mode auto is not available for this account; continuing in the default mode.` Default mode denied runtime/deploy shell commands and browser source reading. Their result status was SUCCESS despite `denied_actions` and no code; those runs are not accepted as implementation.
-- The owner subsequently explicitly approved `--dangerously-skip-permissions` for these worktree lines only. Fresh conversations use the flag; the initial denied runs remain unaccepted. Logs remain outside Git.
-- Coordinator manual configuration/auth/journal probe passed: invalid scope denied, cross-application lookup returned 404, request key repeated without duplicate creation, agent budget excluded cache reads, content canary absent from journal projections, restart marked active session interrupted. No automated suite added.
+These are manual/integration probes, not new automated suites. This host is `ui:false`; no browser regression suite was generated. Probe scripts remain outside Git and use synthetic canaries only.
 
-## Coordinator integration in progress
+| Surface | Observed result |
+| --- | --- |
+| Actual ASGI routes plus real child processes | Auth/scopes, cross-app404, strict unsupported fields, sync and streaming completions, idempotency/conflict, usage policy, cancellation, consumer loss, source ACK, body cap passed |
+| Real TMS completion client against actual host routes/processes | Sync/SSE text and usage 115 passed; prompt 112 includes 100 cached reads, output 3 |
+| SDK message/option classes | Distinct event UUID text dedup; budget 15 excludes 50 cache reads; truncated result/deadline/incomplete counters fail honestly |
+| Real non-root Chromium | UID1000, zero initial capabilities, sandbox enabled, original-origin navigation, named secrets, password-field restriction, snapshot/screenshot echo refusal passed |
+| Guarded Docker namespaces | Direct IPv4/IPv6, TCP DNS and Docker UDP resolver denied; internal stand reachable; external HTTP crosses synthetic fixed parent |
+| Parent outage | Proxy request fails; direct external fallback stays denied |
+| Process failure | SIGKILL of actual browser-owning worker cleaned 9 processes including Chromium/driver; no surviving child PIDs |
+| Actual Compose API | Authentication/models/metrics work; missing official auth yields readiness503; guard marker read-only; SIGUSR1 drain rejects new work |
+| Builds and syntax | Native aarch64 application, guard and GOST images built; Ruff, compile, JSON, shell and Compose smoke passed |
+| TMS creator/grant/receipt | Real DB and route probes cover selected credential set, one-use expiry/replay, origin/key/owner/project/job/stand/worker fences, revocation and atomic usage rollback/retry |
+| TMS author workflow | Candidate persisted before ACK; 3 checks per attempt;2 intentional attempts use 6 checks, reduce remaining budget and charge 24 once; reclaim launches no new model |
 
-All three first lane reports required a consolidated fresh-agent correction. Runtime review found stream UUID/provider ID confusion, false success on truncated streams, and unbounded cleanup. Browser review found incomplete origin/lease validation and missing real browser startup. Deploy review found a mismatched browser image and missing proxy-namespace firewall. Corrections are committed on the producer branches; coordinator integration probes remain required.
+## Existing TMS gates
 
-TMS integration lives in a separate worktree at `ai-testcase-generator/.worktrees/sdk-host-integration`, branch `codex/claude-host-integration`, base `f1de99aa463e`. Credential grants and accounting receipts use the existing leased platform job payload under row locks, with no new schema or migration. Usage receipts and domain counters commit in one transaction. Changing this choice later would require a schema migration and receipt backfill; current volume is bounded per job.
+The initial full snapshot returned 2754 passed, 25 skipped, 1 failed. The failure was the canonical schema checker's hard-coded table set; it failed identically on canonical master without this integration. The owner subsequently merged that fix in cycle83; the refreshed final tree passed the full suite: **2768 passed, 24 skipped, 0 failed** in 869.38 seconds.
 
-Existing targeted TMS tests on the coordinator's disposable Postgres port 5639 passed: **54 passed, 1 skipped**. The first attempt failed because enum migrations had not been applied; applying the repository's documented Alembic bootstrap resolved it. This is not evidence for new host adapters yet.
+After consolidated fixes, the affected existing suite passed 428 tests with 13 skipped; the narrow legacy author/API gate passed 10 with 3 skipped. Frontend lint/types/build and 171 component files passed on the earlier snapshot. Coordinator independently reran legacy generation clients: 32 passed, 1 skipped, and ran the actual cross-repository API/client probe. The fresh cycle 83 frontend gate also passed: **174 component files, 0 failed**, lint (12 warnings, 0 errors), TypeScript and production build. No existing test was skipped, weakened or edited by this task.
 
-Coordinator added the API request contracts and supervisor against the already verified config/journal producer and frozen runtime interface; actual runtime worker integration is gated on corrected producers below. New source has only been compiled/linted so far, not accepted as working. No live Claude login, inference or production deployment occurred.
+## Remaining live release evidence
+
+Official owner login/refresh, real multi-turn model usage, actual configured upstream exit IP, the server's architecture/sandbox and a live SSH tunnel remain go-live checks. Local fake-parent tests establish enforcement, not the owner's final proxy identity. Registration, TLS CA, internal peer addresses and proxy credentials are operator inputs; no secret value belongs in Git. No deployment is implicit in this implementation.
+
+QA Lab host documentation sync was invoked three times. The attempts failed at the external generator with `[Errno 54] Connection reset by peer`; the manual acceptance ledger above remains available. No generated cases are claimed, and no TMS QA Lab sync was run because that repository requires an explicit separate request.
+
+## Cost/volume record
+
+The six approved cycle 1 Antigravity runs report 1408768 input, 409172 output and 36553833 cache-read tokens; their recorded total excludes cache reads (1817940). These are CLI-reported counters, not independently verified billing or quota. Cycle 2 tunnel work is recorded separately below. Logs live outside Git. Codex usage was 61%/57% of the five-hour/weekly windows at start and 64%/73% at the later recorded snapshot. A native TMS agent reached its usage limit after committing its implementation/report; the coordinator inspected the artifacts and continued final integration independently.
+
+
+## Final tunnel reconciliation
+
+A verified TMS grant now binds access mode and reverse-forward port; changing either invalidates the grant. Redemption returns only `tunnel.port`. The host chooses relay IP and inclusive port range from its operator registry, retaining the original stand origin, Host, cookies and TLS SNI. Localhost stands without valid tunnel metadata fail before Chromium. The browser's local forward proxy routes other external resources through the fixed GOST parent, with exact registered internal bypasses only.
+
+Fresh Antigravity browser cycle 2 produced commit `788ec71`, merged with coordinator fixes as `529f788`. The real HTTP/1.1 browser AJAX probe found a keep-alive stall missed by the socket producer probes. One-request connection closing resolved the reproduced failure. The coordinator additionally verified TLS to an HTTPS parent, external CONNECT, stand WebSocket byte relay, exact origin refusal and listener/task cleanup. The outer packet policy permits only the registered tunnel peer and its explicit port range. Actual SSH transport on the production server remains a release check; the local TCP relay is a synthetic stand transport.
+
+The application image was built from the final source on local aarch64. The final test stack and disposable Postgres are removed after acceptance; no production volume or server service is touched. Native managed archive requests for the two finished lane checkouts were refused by the app because another active task uses them; those checkouts are retained, not removed through a filesystem workaround. All producer commits are preserved in the integration branch.
+
+
+Cycle 2 Antigravity CLI counters: 272859 input, 85158 output, 7716910 cache reads; reported input/output total 358017. Thinking counter 51695 is reported separately. These are not billing estimates.
+
+Final built-image probes (without a source overlay) passed the tunnel HTTP/1.1 navigation/AJAX path, direct-stand secret/refusal path, and configured synthetic proxy exit with direct IPv4/IPv6/metadata/DNS denial. `docker compose up --wait` reported every test service healthy. Its application healthcheck verifies the real HTTP liveness endpoint. The disposable SDK stack and its synthetic auth/journal/network volumes were removed after these probes.
