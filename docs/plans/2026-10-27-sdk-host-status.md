@@ -82,9 +82,11 @@ A verified TMS grant now binds access mode and reverse-forward port; changing ei
 
 Fresh Antigravity browser cycle 2 produced commit `788ec71`, merged with coordinator fixes as `529f788`. The real HTTP/1.1 browser AJAX probe found a keep-alive stall missed by the socket producer probes. One-request connection closing resolved the reproduced failure. The coordinator additionally verified TLS to an HTTPS parent, external CONNECT, stand WebSocket byte relay, exact origin refusal and listener/task cleanup. The outer packet policy permits only the registered tunnel peer and its explicit port range. Actual SSH transport on the production server remains a release check; the local TCP relay is a synthetic stand transport.
 
-The application image was built from the final source on local aarch64. The final test stack and disposable Postgres are removed after acceptance; no production volume or server service is touched. Native managed archive requests for the two finished lane checkouts were refused by the app because another active task uses them; those checkouts are retained, not removed through a filesystem workaround. All producer commits are preserved in the integration branch.
+The application image was built from the final source on local aarch64. The final test stack and disposable Postgres are removed after acceptance; no production volume or server service is touched. Native managed archive requests for the three finished lane checkouts were refused by the app because another active task uses them; those checkouts are retained, not removed through a filesystem workaround. All producer commits are preserved in the integration branch.
 
 
 Cycle 2 Antigravity CLI counters: 272859 input, 85158 output, 7716910 cache reads; reported input/output total 358017. Thinking counter 51695 is reported separately. These are not billing estimates.
 
 Final built-image probes (without a source overlay) passed the tunnel HTTP/1.1 navigation/AJAX path, direct-stand secret/refusal path, and configured synthetic proxy exit with direct IPv4/IPv6/metadata/DNS denial. `docker compose up --wait` reported every test service healthy. Its application healthcheck verifies the real HTTP liveness endpoint. The disposable SDK stack and its synthetic auth/journal/network volumes were removed after these probes.
+
+The coordinator also removed its disposable PostgreSQL project `tms-sdk-host` after the final gates. Other local stacks and the original user files were not modified.
