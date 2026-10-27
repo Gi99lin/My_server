@@ -172,6 +172,7 @@ class CredentialProviderClient:
         self._client: httpx.AsyncClient | None = None
         self._grant_id: str | None = None
         self._expires_at: str | None = None
+        self._tunnel_port: int | None = None
 
     def __repr__(self) -> str:
         return f"CredentialProviderClient(grant_id={self._grant_id!r})"
@@ -179,6 +180,10 @@ class CredentialProviderClient:
     @property
     def grant_id(self) -> str | None:
         return self._grant_id
+
+    @property
+    def tunnel_port(self) -> int | None:
+        return self._tunnel_port
 
     def _read_token(self) -> str:
         if not self._token_file.exists():
@@ -249,6 +254,7 @@ class CredentialProviderClient:
         grant_id = data.get("grant_id")
         expires_at = data.get("expires_at")
         values = data.get("values")
+        tunnel_raw = data.get("tunnel")
 
         if not isinstance(grant_id, str) or not grant_id.strip():
             raise CredentialError("credential_response_missing_grant_id")
@@ -269,8 +275,18 @@ class CredentialProviderClient:
         if is_expired(expires_at):
             raise CredentialError("grant_already_expired")
 
+        parsed_tunnel_port: int | None = None
+        if tunnel_raw is not None:
+            if not isinstance(tunnel_raw, dict) or set(tunnel_raw.keys()) != {"port"}:
+                raise CredentialError("invalid_tunnel_descriptor")
+            port = tunnel_raw["port"]
+            if type(port) is not int or isinstance(port, bool) or not (1 <= port <= 65535):
+                raise CredentialError("invalid_tunnel_descriptor")
+            parsed_tunnel_port = port
+
         self._grant_id = grant_id
         self._expires_at = expires_at
+        self._tunnel_port = parsed_tunnel_port
         return grant_id, cleaned_values, expires_at
 
     async def check_active(self) -> GrantStatus:

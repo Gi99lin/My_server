@@ -25,6 +25,7 @@ from .credentials import (
 )
 from .evidence import McpEvidenceSink
 from .submission import SUBMIT_SPEC, Submission
+from .tunnel_proxy import is_loopback_or_local
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +221,58 @@ class SessionTools:
                 origin=self._origin,
             )
 
+            # Validate tunnel mapping against operator config
+            norm_origin = origin_of(self._origin)
+            if norm_origin is None:
+                raise RunFailure("invalid_stand_origin")
+            _, origin_host, _ = norm_origin
+            origin_is_loopback = is_loopback_or_local(origin_host)
+            redeemed_tunnel_port = self._credential_client.tunnel_port
+
+            selected_tunnel_host: str | None = None
+            selected_tunnel_port: int | None = None
+
+            if origin_is_loopback:
+                if redeemed_tunnel_port is None:
+                    raise RunFailure("missing_tunnel_metadata")
+                cfg_tunnel_host = self._provider_config.get("tunnel_host")
+                if (
+                    not cfg_tunnel_host
+                    or not isinstance(cfg_tunnel_host, str)
+                    or not cfg_tunnel_host.strip()
+                    or is_loopback_or_local(cfg_tunnel_host)
+                ):
+                    raise RunFailure("invalid_tunnel_relay")
+                port_min = self._provider_config.get("tunnel_port_min", 42000)
+                port_max = self._provider_config.get("tunnel_port_max", 42999)
+                if not isinstance(port_min, int) or not isinstance(port_max, int) or port_min > port_max:
+                    raise RunFailure("invalid_tunnel_configuration")
+                if not (port_min <= redeemed_tunnel_port <= port_max):
+                    raise RunFailure("tunnel_port_out_of_range")
+                selected_tunnel_host = cfg_tunnel_host.strip()
+                selected_tunnel_port = redeemed_tunnel_port
+            else:
+                if redeemed_tunnel_port is not None:
+                    cfg_tunnel_host = self._provider_config.get("tunnel_host")
+                    if (
+                        not cfg_tunnel_host
+                        or not isinstance(cfg_tunnel_host, str)
+                        or not cfg_tunnel_host.strip()
+                        or is_loopback_or_local(cfg_tunnel_host)
+                    ):
+                        raise RunFailure("invalid_tunnel_relay")
+                    port_min = self._provider_config.get("tunnel_port_min", 42000)
+                    port_max = self._provider_config.get("tunnel_port_max", 42999)
+                    if not isinstance(port_min, int) or not isinstance(port_max, int) or port_min > port_max:
+                        raise RunFailure("invalid_tunnel_configuration")
+                    if not (port_min <= redeemed_tunnel_port <= port_max):
+                        raise RunFailure("tunnel_port_out_of_range")
+                    selected_tunnel_host = cfg_tunnel_host.strip()
+                    selected_tunnel_port = redeemed_tunnel_port
+                else:
+                    selected_tunnel_host = None
+                    selected_tunnel_port = None
+
             basic_user = values.get("__HTTP_BASIC_USERNAME")
             basic_pass = values.get("__HTTP_BASIC_PASSWORD")
             http_credentials: tuple[str, str] | None = None
@@ -249,7 +302,13 @@ class SessionTools:
                     http_credentials=http_credentials,
                     proxy_url=self._provider_config.get("proxy_url"),
                     proxy_bypass=self._provider_config.get("proxy_bypass"),
+                    tunnel_host=selected_tunnel_host,
+                    tunnel_port=selected_tunnel_port,
                 )
+            else:
+                if selected_tunnel_host is not None:
+                    self._session._tunnel_host = selected_tunnel_host
+                    self._session._tunnel_port = selected_tunnel_port
 
             async def _check_active_cb() -> None:
                 await self.check_active()
