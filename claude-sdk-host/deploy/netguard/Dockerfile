@@ -3,7 +3,7 @@ FROM alpine:3.20
 # Install nftables, iproute2, and bash for atomic firewall management
 RUN apk add --no-cache nftables iproute2 bash
 
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY deploy/netguard/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 HEALTHCHECK --interval=5s --timeout=3s --retries=3 --start-period=2s \

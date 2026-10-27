@@ -1,7 +1,8 @@
+# ruff: noqa: E501
 """Framework-neutral browser toolkit for headless Chromium automation.
 
 Provenance:
-Adapted from /Users/ivanakimkin/Projects/ai-testcase-generator/test_importer_web/backend/src/tms/agents/sdk_runner/browser_tools.py.
+Adapted from TMS src/tms/agents/sdk_runner/browser_tools.py.
 Preserves the exact nine operations, input schemas, serialized execution, same-origin checks,
 named secret typing, echo redaction, and masked evidence handling.
 """
@@ -13,6 +14,7 @@ import contextlib
 import re
 from collections.abc import Awaitable, Callable
 from typing import Any
+from urllib.parse import urljoin
 
 from .browser import (
     CRASH_MARKERS,
@@ -54,7 +56,10 @@ TARGET_SCHEMA: dict[str, Any] = {
         "selector. Роли и имена берите из снимка страницы. nth — номер среди нескольких подходящих (с нуля)."
     ),
     "properties": {
-        "role": {"type": "string", "description": "Роль элемента, например button, link, textbox, combobox, checkbox"},
+        "role": {
+            "type": "string",
+            "description": "Роль элемента, например button, link, textbox, combobox, checkbox",
+        },
         "name": {"type": "string", "description": "Доступное имя элемента (только вместе с role)"},
         "text": {"type": "string", "description": "Видимый текст элемента"},
         "label": {"type": "string", "description": "Подпись поля ввода"},
@@ -117,14 +122,18 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         "press_key",
         "Нажимает клавишу или сочетание (Enter, Tab, Escape, Control+A). С target — на этом элементе, без — на странице.",
         _schema(
-            {"key": {"type": "string", "description": "Клавиша, например Enter"}, "target": TARGET_SCHEMA}, ["key"]
+            {"key": {"type": "string", "description": "Клавиша, например Enter"}, "target": TARGET_SCHEMA},
+            ["key"],
         ),
     ),
     ToolSpec(
         "select_option",
         "Выбирает пункт выпадающего списка по его тексту или значению.",
         _schema(
-            {"target": TARGET_SCHEMA, "option": {"type": "string", "description": "Текст или значение пункта"}},
+            {
+                "target": TARGET_SCHEMA,
+                "option": {"type": "string", "description": "Текст или значение пункта"},
+            },
             ["target", "option"],
         ),
     ),
@@ -184,7 +193,9 @@ def _target_arg(arguments: dict[str, Any], key: str = "target") -> dict[str, Any
         raise ToolRefusal(f"{key}: неизвестные поля {', '.join(sorted(map(str, unknown)))}")
     used = [name for name in LOCATOR_KEYS if target.get(name) not in (None, "")]
     if len(used) != 1:
-        raise ToolRefusal(f"{key}: укажите ровно один способ найти элемент: role (с name), text, label, placeholder или selector")
+        raise ToolRefusal(
+            f"{key}: укажите ровно один способ найти элемент: role (с name), text, label, placeholder или selector"
+        )
     if any(not isinstance(target[name], str) for name in used):
         raise ToolRefusal(f"{key}.{used[0]}: нужна строка")
     if target.get("name") not in (None, "") and used[0] != "role":
@@ -257,7 +268,10 @@ class BrowserToolkit:
             except ToolRefusal as refusal:
                 result = ToolOutput(str(refusal), True)
             except BrowserUnavailable:
-                result = ToolOutput("Не удалось запустить браузер: повторите вызов, а при повторе передайте тест-поинт человеку", True)
+                result = ToolOutput(
+                    "Не удалось запустить браузер: повторите вызов, а при повторе передайте тест-поинт человеку",
+                    True,
+                )
             except Exception as error:
                 result = ToolOutput(await self._failure(error), True)
         return ToolOutput(self._shape(result.text), result.is_error)
@@ -348,9 +362,7 @@ class BrowserToolkit:
     async def _open_url(self, arguments: dict[str, Any]) -> str:
         raw = _text_arg(arguments, "url", limit=2000).strip()
         absolute = (
-            urljoin(self._address.rstrip("/") + "/", raw)
-            if raw.startswith("/") and not raw.startswith("//")
-            else raw
+            urljoin(self._address.rstrip("/") + "/", raw) if raw.startswith("/") and not raw.startswith("//") else raw
         )
         refusal = stand_url_refusal(self._address, absolute)
         if refusal:
@@ -443,7 +455,9 @@ class BrowserToolkit:
     async def _wait(self, arguments: dict[str, Any]) -> str:
         text = _text_arg(arguments, "text", required=False, limit=500)
         seconds = arguments.get("seconds")
-        if seconds is not None and (isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or not 0 <= seconds <= 10):
+        if seconds is not None and (
+            isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or not 0 <= seconds <= 10
+        ):
             raise ToolRefusal("seconds: допустимо от 0 до 10")
         if text is None and seconds is None:
             raise ToolRefusal("wait: укажите text или seconds")

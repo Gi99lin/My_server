@@ -8,7 +8,7 @@ COPY --from=gost_base /bin/gost /usr/local/bin/gost
 # Install minimal runtime utilities for validation, healthcheck, and log redaction
 RUN apk add --no-cache bash jq netcat-openbsd sed
 
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY deploy/egress/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 8080

@@ -33,6 +33,6 @@ venv.bak/
 .gitignore
 .dockerignore
 *.md
-deploy/
+deploy/secrets_example/
 docker-compose*.yml
 config.example.json

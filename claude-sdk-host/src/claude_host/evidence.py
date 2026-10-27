@@ -1,7 +1,7 @@
 """Streamable HTTP MCP evidence client for tms-execution.
 
 Provenance:
-Adapted from /Users/ivanakimkin/Projects/ai-testcase-generator/test_importer_web/backend/src/tms/agents/sdk_runner/evidence.py.
+Adapted from TMS src/tms/agents/sdk_runner/evidence.py.
 Never logs tokens or transmits raw screenshot/evidence bytes to the model.
 """
 

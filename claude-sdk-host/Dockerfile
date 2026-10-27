@@ -24,7 +24,8 @@ RUN mkdir -p /var/lib/claude-auth /var/lib/claude-host /tmp/claude-host /app && 
 WORKDIR /app
 
 # Copy application package source (src/claude_host and coordinator pyproject.toml)
-COPY --chown=pwuser:pwuser . /app
+COPY --chown=pwuser:pwuser pyproject.toml /app/
+COPY --chown=pwuser:pwuser src /app/src
 
 # Build and install package at build time. No runtime network installations or updates permitted.
 # Official Claude Code CLI is bundled inside claude-agent-sdk wheel; do not install another global CLI.

@@ -121,10 +121,7 @@ class Settings(BaseModel):
     @field_validator("proxy_bypass")
     @classmethod
     def valid_bypass(cls, values: list[str]) -> list[str]:
-        if any(
-            not value or any(c in value for c in "*/,@") or any(c.isspace() for c in value)
-            for value in values
-        ):
+        if any(not value or any(c in value for c in "*/,@") or any(c.isspace() for c in value) for value in values):
             raise ValueError("proxy bypass requires exact hostnames or IP addresses")
         return values
 
@@ -156,9 +153,7 @@ class Settings(BaseModel):
                 raise RunFailure("provider_ca_unavailable")
 
     def sdk_environment(self) -> dict[str, str]:
-        result = {
-            name: os.environ[name] for name in ("PATH", "LANG", "LC_ALL", "TMPDIR") if name in os.environ
-        }
+        result = {name: os.environ[name] for name in ("PATH", "LANG", "LC_ALL", "TMPDIR") if name in os.environ}
         result.update(
             {
                 "HOME": str(self.auth_dir.parent),

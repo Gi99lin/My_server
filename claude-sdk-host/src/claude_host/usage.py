@@ -113,32 +113,9 @@ class UsageMeter:
             # No anonymous message accumulation that conflates turns when IDs absent;
             # mark incomplete honestly and do not conflate under a shared key.
             self._has_missing_id = True
-            delta_in = _safe_int(usage.get("input_tokens"))
-            delta_cc = _safe_int(usage.get("cache_creation_input_tokens"))
-            delta_cr = _safe_int(usage.get("cache_read_input_tokens"))
-            delta_out = _safe_int(usage.get("output_tokens"))
-
-            if not (delta_in or delta_cc or delta_cr or delta_out):
-                return []
-
-            delta_budget = delta_in + delta_cc + delta_out
-            delta_comp_prompt = delta_in + delta_cc + delta_cr
-
-            self.total_input_tokens += delta_in
-            self.total_cache_creation_input_tokens += delta_cc
-            self.total_cache_read_input_tokens += delta_cr
-            self.total_output_tokens += delta_out
-            self.total_budget_tokens += delta_budget
-            self.total_completion_prompt_tokens += delta_comp_prompt
-
-            return [{
-                "input_tokens": delta_in,
-                "cache_creation_input_tokens": delta_cc,
-                "cache_read_input_tokens": delta_cr,
-                "output_tokens": delta_out,
-                "budget_tokens": delta_budget,
-                "completion_prompt_tokens": delta_comp_prompt,
-            }]
+            # An unidentifiable observation cannot safely be charged twice.
+            # The authoritative result settles these counters later.
+            return []
 
         new_in = _safe_int(usage.get("input_tokens"))
         new_cc = _safe_int(usage.get("cache_creation_input_tokens"))
@@ -172,14 +149,16 @@ class UsageMeter:
         self.total_budget_tokens += delta_budget
         self.total_completion_prompt_tokens += delta_comp_prompt
 
-        return [{
-            "input_tokens": delta_in,
-            "cache_creation_input_tokens": delta_cc,
-            "cache_read_input_tokens": delta_cr,
-            "output_tokens": delta_out,
-            "budget_tokens": delta_budget,
-            "completion_prompt_tokens": delta_comp_prompt,
-        }]
+        return [
+            {
+                "input_tokens": delta_in,
+                "cache_creation_input_tokens": delta_cc,
+                "cache_read_input_tokens": delta_cr,
+                "output_tokens": delta_out,
+                "budget_tokens": delta_budget,
+                "completion_prompt_tokens": delta_comp_prompt,
+            }
+        ]
 
     def _observe_result_usage(self, usage: Any) -> list[dict[str, int]]:
         self._result_seen = True
@@ -237,14 +216,16 @@ class UsageMeter:
         if not (delta_in or delta_cc or delta_cr or delta_out):
             return []
 
-        return [{
-            "input_tokens": delta_in,
-            "cache_creation_input_tokens": delta_cc,
-            "cache_read_input_tokens": delta_cr,
-            "output_tokens": delta_out,
-            "budget_tokens": delta_budget,
-            "completion_prompt_tokens": delta_comp_prompt,
-        }]
+        return [
+            {
+                "input_tokens": delta_in,
+                "cache_creation_input_tokens": delta_cc,
+                "cache_read_input_tokens": delta_cr,
+                "output_tokens": delta_out,
+                "budget_tokens": delta_budget,
+                "completion_prompt_tokens": delta_comp_prompt,
+            }
+        ]
 
     def is_accounting_complete(self) -> bool:
         """True only when a valid ResultMessage was observed, settled and no IDs were absent."""

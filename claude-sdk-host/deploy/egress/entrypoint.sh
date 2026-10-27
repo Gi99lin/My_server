@@ -35,7 +35,7 @@ if ! jq empty "$CONFIG_FILE" >/dev/null 2>&1; then
 fi
 
 # Verify Debug logging is false (strictly prohibit HTTP body/header debug logging)
-DEBUG_VAL=$(jq -r '.Debug // empty' "$CONFIG_FILE")
+DEBUG_VAL=$(jq -r 'if has("Debug") then .Debug else null end' "$CONFIG_FILE")
 if [ "$DEBUG_VAL" != "false" ]; then
     echo "[sdk-egress] FATAL: 'Debug' must be explicitly set to false. Header/body logging forbidden." >&2
     exit 1
@@ -96,7 +96,4 @@ echo "[sdk-egress] Configuration successfully validated. Mandatory upstream chai
 echo "[sdk-egress] Launching GOST forwarder (suppressing credential URLs and authorization headers)..."
 
 # Execute GOST while suppressing untrusted request/error logs containing headers or credential URLs
-exec /usr/local/bin/gost -C "$CONFIG_FILE" 2>&1 | sed -u -E \
-    -e 's#://[^:@/]+:[^@/]+@#://[REDACTED]@#g' \
-    -e 's#([Pp]roxy-)?[Aa]uthorization:.*#[REDACTED]#' \
-    -e 's#auth=[^& ]*#auth=[REDACTED]#g'
+exec /usr/local/bin/gost -C "$CONFIG_FILE" >/dev/null 2>&1

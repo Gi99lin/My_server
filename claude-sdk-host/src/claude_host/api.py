@@ -78,9 +78,7 @@ def usage_response(counters: dict) -> dict:
     }
 
 
-def create_app(
-    config_path: Path, *, settings: Settings | None = None, supervisor: Supervisor | None = None
-) -> FastAPI:
+def create_app(config_path: Path, *, settings: Settings | None = None, supervisor: Supervisor | None = None) -> FastAPI:
     cfg = settings or load_settings(config_path)
     manager = supervisor or Supervisor(cfg, config_path)
 
@@ -99,9 +97,7 @@ def create_app(
             loop.remove_signal_handler(signal.SIGUSR1)
             await manager.close()
 
-    app = FastAPI(
-        title="Personal Claude SDK Host", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
-    )
+    app = FastAPI(title="Personal Claude SDK Host", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.settings, app.state.supervisor = cfg, manager
     app.add_middleware(BodyLimit, limit=cfg.max_body_bytes)
 
@@ -149,10 +145,7 @@ def create_app(
         application = request_application(request)
         return {
             "object": "list",
-            "data": [
-                {"id": model, "object": "model", "owned_by": "personal-claude"}
-                for model in application.models
-            ],
+            "data": [{"id": model, "object": "model", "owned_by": "personal-claude"} for model in application.models],
         }
 
     @app.get("/v1/capabilities")
@@ -227,9 +220,7 @@ def create_app(
                 for event in replay:
                     last = max(last, event["seq"])
                     yield sse(event)
-                while (
-                    manager.get(sid, application.id)["state"] not in TERMINAL_STATES or not listener.empty()
-                ):
+                while manager.get(sid, application.id)["state"] not in TERMINAL_STATES or not listener.empty():
                     try:
                         event = await asyncio.wait_for(listener.get(), timeout=5)
                     except TimeoutError:
@@ -244,15 +235,10 @@ def create_app(
             finally:
                 manager.unlisten(sid, listener)
 
-        return StreamingResponse(
-            stream(), media_type="text/event-stream", headers={"X-Accel-Buffering": "no"}
-        )
+        return StreamingResponse(stream(), media_type="text/event-stream", headers={"X-Accel-Buffering": "no"})
 
     def sse(event):
-        return (
-            f"id: {event['event_id']}\nevent: {event['type']}\n"
-            f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-        )
+        return f"id: {event['event_id']}\nevent: {event['type']}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
 
     async def completion(request: Request, chat: bool):
         application = request_application(request, "completion")

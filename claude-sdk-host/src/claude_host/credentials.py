@@ -1,7 +1,7 @@
 """Credential provider wire client and in-memory stand credential store.
 
 Provenance:
-Adapted from /Users/ivanakimkin/Projects/ai-testcase-generator/test_importer_web/backend/src/tms/projects/stands/service.py
+Adapted from TMS src/tms/projects/stands/service.py
 (StandRunnerAccess) and frozen wire contract from docs/plans/tracks/sdk-host-browser-c1.md.
 No TMS backend, database or keyring dependencies.
 """
@@ -13,7 +13,7 @@ import re
 import ssl
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -46,14 +46,14 @@ def parse_utc_iso(iso_str: str) -> datetime:
     """Parse an ISO 8601 UTC timestamp string into a timezone-aware UTC datetime."""
     dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def is_expired(expires_at: str | datetime) -> bool:
     """Check if an expiration timestamp has passed in UTC."""
     dt = parse_utc_iso(expires_at) if isinstance(expires_at, str) else expires_at
-    return datetime.now(timezone.utc) >= dt
+    return datetime.now(UTC) >= dt
 
 
 @dataclass(frozen=True, repr=False)
@@ -71,10 +71,7 @@ class StandRunnerAccess:
     def contains_sensitive(self, data: bytes) -> bool:
         """Check if any secret value in any credential set appears in the given bytes."""
         return any(
-            value.encode("utf-8") in data
-            for fields in self._values.values()
-            for value in fields.values()
-            if value
+            value.encode("utf-8") in data for fields in self._values.values() for value in fields.values() if value
         )
 
     def redact_text(self, text: str) -> str:

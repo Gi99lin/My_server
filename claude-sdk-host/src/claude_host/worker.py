@@ -19,11 +19,15 @@ async def run(config_path: Path):
     from .runtime import SDKRunner
 
     output = sys.stdout
+    terminal_sent = False
 
     def emit(kind: str, data: dict):
-        output.write(
-            json.dumps({"kind": kind, "data": data}, ensure_ascii=False, separators=(",", ":")) + "\n"
-        )
+        nonlocal terminal_sent
+        if kind == "terminal":
+            if terminal_sent:
+                return
+            terminal_sent = True
+        output.write(json.dumps({"kind": kind, "data": data}, ensure_ascii=False, separators=(",", ":")) + "\n")
         output.flush()
 
     runner = None

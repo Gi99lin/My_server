@@ -68,11 +68,7 @@ class Supervisor:
             if task:
                 task.cancel()
         await asyncio.gather(
-            *(
-                self.cancel(s.id, s.app_id, "host_shutdown")
-                for s in list(self.live.values())
-                if not s.done.is_set()
-            ),
+            *(self.cancel(s.id, s.app_id, "host_shutdown") for s in list(self.live.values()) if not s.done.is_set()),
             return_exceptions=True,
         )
         for task in (self._scheduler, self._watchdog):
@@ -93,11 +89,7 @@ class Supervisor:
             raise RunFailure("host_draining", 503)
         profile = payload["profile"]
         category = "completion" if profile == "completion" else "agent"
-        capacity = (
-            self.settings.completion_queue_size
-            if category == "completion"
-            else self.settings.agent_queue_size
-        )
+        capacity = self.settings.completion_queue_size if category == "completion" else self.settings.agent_queue_size
         # Inspect an existing receipt before admission capacity; idempotent reads create no work.
         digest = hmac.new(
             read_secret(self.settings.idempotency_key_file).encode(),
@@ -132,11 +124,7 @@ class Supervisor:
     def get(self, sid: str, app_id: str) -> dict:
         row = self.journal.get(sid, app_id)
         live = self.live.get(sid)
-        if (
-            row["profile"] == "tms-authoring"
-            and row["submission_seq"] is not None
-            and not row["result_acknowledged"]
-        ):
+        if row["profile"] == "tms-authoring" and row["submission_seq"] is not None and not row["result_acknowledged"]:
             row["result_available"] = bool(live and live.submission)
         return row
 
@@ -332,10 +320,16 @@ class Supervisor:
             live.stop_reason = "host_shutdown"
             raise
         except Exception as error:
-            reason = error.code if isinstance(error, RunFailure) else "worker_interrupted"
+            reason = live.stop_reason or (error.code if isinstance(error, RunFailure) else "worker_interrupted")
             if not live.done.is_set():
                 self._publish(
-                    live, "terminal", {"state": "failed", "stop_reason": reason, "accounting_complete": False}
+                    live,
+                    "terminal",
+                    {
+                        "state": self._failure_state(reason),
+                        "stop_reason": reason,
+                        "accounting_complete": False,
+                    },
                 )
         finally:
             await self._terminate(live)
@@ -348,16 +342,25 @@ class Supervisor:
             self.active.discard(live.id)
             self._wakeup.set()
 
+    @staticmethod
+    def _failure_state(reason: str) -> str:
+        return {
+            "cancelled": "cancelled",
+            "client_disconnected": "cancelled",
+            "host_shutdown": "interrupted",
+            "deadline_exceeded": "timed_out",
+            "queue_timeout": "timed_out",
+            "consumer_lost": "consumer_lost",
+            "budget_exceeded": "budget_exceeded",
+        }.get(reason, "failed")
+
     async def _watch(self):
         while True:
             await asyncio.sleep(0.5)
             now = time.monotonic()
             for live in list(self.live.values()):
                 if live.done.is_set():
-                    if (
-                        live.finished is not None
-                        and now - live.finished >= self.settings.submission_retention_seconds
-                    ):
+                    if live.finished is not None and now - live.finished >= self.settings.submission_retention_seconds:
                         live.submission = None
                         if live.id not in self.active:
                             self.live.pop(live.id, None)

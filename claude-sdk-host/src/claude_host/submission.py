@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Pure test source submission validator for authoring sessions.
 
 Provenance:
@@ -55,8 +56,19 @@ _WHOLE_ENVIRONMENT = re.compile(r"process\.env(?!\s*(?:\??\.\s*[A-Za-z_$]|\[))")
 
 ALLOWED_MODULES = frozenset(
     {
-        "@playwright/test", "playwright", "playwright-core",
-        "fs", "fs/promises", "os", "path", "url", "child_process", "crypto", "util", "assert", "assert/strict",
+        "@playwright/test",
+        "playwright",
+        "playwright-core",
+        "fs",
+        "fs/promises",
+        "os",
+        "path",
+        "url",
+        "child_process",
+        "crypto",
+        "util",
+        "assert",
+        "assert/strict",
         "buffer",
     }
 )
@@ -75,9 +87,7 @@ _SIGN_IN_PROCESS = re.compile(r"""(?<![\w$])execFileSync\s*\(\s*process\.execPat
 _EVALUATION = re.compile(r"(?<![\w$.])eval\s*\(|\bnew\s+Function\s*\(")
 _NETWORK = re.compile(r"(?<![\w$.])fetch\s*\(|\bXMLHttpRequest\b|\bWebSocket\b|\bsendBeacon\b|\bEventSource\b")
 
-_SECRET_READ = (
-    r"process\.env(?:\.STAND_(?!URL(?![\w$]))[\w$]+|\[(?!\s*['\"`]STAND_URL['\"`]\s*\])[^\]]*STAND_[^\]]*\])"
-)
+_SECRET_READ = r"process\.env(?:\.STAND_(?!URL(?![\w$]))[\w$]+|\[(?!\s*['\"`]STAND_URL['\"`]\s*\])[^\]]*STAND_[^\]]*\])"
 _SECRET_READ_RE = re.compile(_SECRET_READ)
 _TAINTED_NAME = re.compile(r"(?:const|let|var)\s+([\w$]+)\s*(?::[^=;]+?)?=\s*" + _SECRET_READ)
 
@@ -280,7 +290,9 @@ def _address_literals(access: StandRunnerAccess | None) -> list[str]:
     return [form for form in {clean.strip().rstrip("/"), netloc} if form]
 
 
-def source_refusal(source: str | None, contract: dict | None = None, access: StandRunnerAccess | None = None) -> str | None:
+def source_refusal(
+    source: str | None, contract: dict | None = None, access: StandRunnerAccess | None = None
+) -> str | None:
     """Validate test source against pure constraints. Returns reason if refused, or None if acceptable."""
     contract = contract or {}
     if source and len(source) > MAX_SOURCE_CHARS:

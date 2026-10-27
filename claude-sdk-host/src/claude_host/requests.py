@@ -113,16 +113,10 @@ class CompletionRequest(StrictRequest):
 
     def conversation(self, chat: bool) -> tuple[str, str]:
         if chat:
-            if (
-                not self.messages
-                or self.prompt is not None
-                or not any(m.role == "user" for m in self.messages)
-            ):
+            if not self.messages or self.prompt is not None or not any(m.role == "user" for m in self.messages):
                 raise RunFailure("invalid_messages", 400)
             system = "\n\n".join(m.content for m in self.messages if m.role == "system")
-            conversation = [
-                {"role": m.role, "content": m.content} for m in self.messages if m.role != "system"
-            ]
+            conversation = [{"role": m.role, "content": m.content} for m in self.messages if m.role != "system"]
             # JSON encoding preserves untrusted history as data and prevents delimiter injection.
             return system, "Continue this conversation with the next assistant response.\n" + json.dumps(
                 conversation, ensure_ascii=False

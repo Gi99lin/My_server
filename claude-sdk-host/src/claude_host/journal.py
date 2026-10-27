@@ -85,9 +85,7 @@ class Journal:
     ) -> tuple[dict[str, Any], bool]:
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute(
-                "SELECT * FROM sessions WHERE app_id=? AND request_id=?", (app_id, request_id)
-            ).fetchone()
+            row = db.execute("SELECT * FROM sessions WHERE app_id=? AND request_id=?", (app_id, request_id)).fetchone()
             if row is not None:
                 if row["digest"] != digest:
                     raise RunFailure("idempotency_conflict", 409)
@@ -124,19 +122,13 @@ class Journal:
         }
         result["accounting_complete"] = bool(row["accounting_complete"])
         result["usage"] = {key: row[key] for key in USAGE_FIELDS}
-        result["budget_tokens"] = (
-            row["input_tokens"] + row["cache_creation_input_tokens"] + row["output_tokens"]
-        )
-        result["result_acknowledged"] = (
-            row["submission_seq"] is not None and row["ack_seq"] >= row["submission_seq"]
-        )
+        result["budget_tokens"] = row["input_tokens"] + row["cache_creation_input_tokens"] + row["output_tokens"]
+        result["result_acknowledged"] = row["submission_seq"] is not None and row["ack_seq"] >= row["submission_seq"]
         return result
 
     def get(self, session_id: str, app_id: str) -> dict[str, Any]:
         with self.connection() as db:
-            row = db.execute(
-                "SELECT * FROM sessions WHERE id=? AND app_id=?", (session_id, app_id)
-            ).fetchone()
+            row = db.execute("SELECT * FROM sessions WHERE id=? AND app_id=?", (session_id, app_id)).fetchone()
         if row is None:
             raise RunFailure("session_not_found", 404)
         return self.public(row)
@@ -169,9 +161,7 @@ class Journal:
             if kind == "usage":
                 persisted = {key: self.counter(data.get(key, 0)) for key in USAGE_FIELDS}
                 persisted["budget_tokens"] = (
-                    persisted["input_tokens"]
-                    + persisted["cache_creation_input_tokens"]
-                    + persisted["output_tokens"]
+                    persisted["input_tokens"] + persisted["cache_creation_input_tokens"] + persisted["output_tokens"]
                 )
                 for key in USAGE_FIELDS:
                     db.execute(f"UPDATE sessions SET {key}={key}+? WHERE id=?", (persisted[key], session_id))
@@ -231,9 +221,7 @@ class Journal:
     def ack(self, session_id: str, app_id: str, seq: int) -> dict[str, Any]:
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute(
-                "SELECT * FROM sessions WHERE id=? AND app_id=?", (session_id, app_id)
-            ).fetchone()
+            row = db.execute("SELECT * FROM sessions WHERE id=? AND app_id=?", (session_id, app_id)).fetchone()
             if row is None:
                 raise RunFailure("session_not_found", 404)
             if isinstance(seq, bool) or seq < 0 or seq > row["last_seq"]:
@@ -246,9 +234,7 @@ class Journal:
 
     def interrupt_stale(self) -> None:
         with self.connection() as db:
-            rows = db.execute(
-                "SELECT id FROM sessions WHERE state IN ('queued','starting','running')"
-            ).fetchall()
+            rows = db.execute("SELECT id FROM sessions WHERE state IN ('queued','starting','running')").fetchall()
         for row in rows:
             self.append(
                 row["id"],

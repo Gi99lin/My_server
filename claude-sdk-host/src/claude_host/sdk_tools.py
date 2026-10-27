@@ -1,7 +1,7 @@
 """SessionTools factory and in-process SDK MCP tool server registration.
 
 Provenance:
-Adapted from /Users/ivanakimkin/Projects/ai-testcase-generator/test_importer_web/backend/src/tms/agents/sdk_runner/sdk_server.py
+Adapted from TMS src/tms/agents/sdk_runner/sdk_server.py
 and src/tms/agents/sdk_author/tools.py.
 Preserves exact tool names (mcp__browser__{name}, mcp__author__submit_test), pure constructor factory,
 and fail-closed grant watchdog checks.
@@ -106,8 +106,7 @@ class SessionTools:
 
     def __repr__(self) -> str:
         return (
-            f"SessionTools(origin={self._origin!r}, credential_key={self._credential_key!r}, "
-            f"started={self._started})"
+            f"SessionTools(origin={self._origin!r}, credential_key={self._credential_key!r}, started={self._started})"
         )
 
     @classmethod
@@ -290,7 +289,7 @@ class SessionTools:
                 await self._credential_client.aclose()
         self._started = False
 
-    async def check_active(self) -> None:
+    async def check_active(self) -> bool:
         """Fail closed if the credential grant is revoked, expired, or provider unreachable."""
         if self._credential_client is None or not self._started:
             raise RunFailure("tools_not_started")
@@ -298,6 +297,7 @@ class SessionTools:
             status = await self._credential_client.check_active()
             if not status.active:
                 raise RunFailure("grant_inactive")
+            return True
         except GrantInactiveError:
             raise RunFailure("grant_inactive") from None
         except RunFailure:
@@ -344,12 +344,10 @@ class SessionTools:
                 async def handler(arguments: dict[str, Any]) -> dict[str, Any]:
                     output = await toolkit.call(spec_name, arguments)
                     return _format_reply(output)
+
                 return handler
 
-            browser_tools = [
-                _make_sdk_tool(sdk, spec, make_browser_handler(spec.name))
-                for spec in specs
-            ]
+            browser_tools = [_make_sdk_tool(sdk, spec, make_browser_handler(spec.name)) for spec in specs]
 
             async def submit_test_handler(arguments: dict[str, Any]) -> dict[str, Any]:
                 await self.check_active()
@@ -368,12 +366,10 @@ class SessionTools:
             async def handler(arguments: dict[str, Any]) -> dict[str, Any]:
                 output = await toolkit.call(spec_name, arguments)
                 return _format_reply(output)
+
             return handler
 
-        browser_tools = [
-            _make_sdk_tool(sdk, spec, make_execution_browser_handler(spec.name))
-            for spec in TOOL_SPECS
-        ]
+        browser_tools = [_make_sdk_tool(sdk, spec, make_execution_browser_handler(spec.name)) for spec in TOOL_SPECS]
         return {
             BROWSER_SERVER: _make_sdk_server(sdk, BROWSER_SERVER, browser_tools),
         }

@@ -12,6 +12,7 @@ Owns the execution lifecycle for Claude Agent SDK sessions:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import inspect
 import logging
 import os
@@ -48,63 +49,69 @@ DISALLOWED_BUILTIN_TOOLS: tuple[str, ...] = (
     "Skill",
 )
 
-ALLOWLISTED_ENV_KEYS: frozenset[str] = frozenset({
-    # System / Runtime / Locale
-    "PATH",
-    "HOME",
-    "USER",
-    "LOGNAME",
-    "SHELL",
-    "LANG",
-    "LC_ALL",
-    "LC_CTYPE",
-    "TERM",
-    "TMPDIR",
-    # Proxy configuration
-    "HTTP_PROXY",
-    "http_proxy",
-    "HTTPS_PROXY",
-    "https_proxy",
-    "NO_PROXY",
-    "no_proxy",
-    "ALL_PROXY",
-    "all_proxy",
-    # Official CLI auth and state directory configuration
-    "CLAUDE_CONFIG_DIR",
-    "CLAUDE_STATE_DIR",
-    "XDG_CONFIG_HOME",
-    "XDG_DATA_HOME",
-    "XDG_CACHE_HOME",
-    "XDG_RUNTIME_DIR",
-})
+ALLOWLISTED_ENV_KEYS: frozenset[str] = frozenset(
+    {
+        # System / Runtime / Locale
+        "PATH",
+        "HOME",
+        "USER",
+        "LOGNAME",
+        "SHELL",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "TERM",
+        "TMPDIR",
+        # Proxy configuration
+        "HTTP_PROXY",
+        "http_proxy",
+        "HTTPS_PROXY",
+        "https_proxy",
+        "NO_PROXY",
+        "no_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+        # Official CLI auth and state directory configuration
+        "CLAUDE_CONFIG_DIR",
+        "CLAUDE_STATE_DIR",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_CACHE_HOME",
+        "XDG_RUNTIME_DIR",
+    }
+)
 
-FORBIDDEN_ENV_KEYS: frozenset[str] = frozenset({
-    "ANTHROPIC_API_KEY",
-    "CLAUDE_API_KEY",
-    "ANTHROPIC_AUTH_TOKEN",
-    "ANTHROPIC_BASE_URL",
-    "ANTHROPIC_PROVIDER",
-    "API_KEY",
-    "CLAUDE_BASE_URL",
-    "OAUTH_TOKEN",
-    "CLAUDE_OAUTH_TOKEN",
-    "ANTHROPIC_OAUTH_TOKEN",
-})
+FORBIDDEN_ENV_KEYS: frozenset[str] = frozenset(
+    {
+        "ANTHROPIC_API_KEY",
+        "CLAUDE_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_PROVIDER",
+        "API_KEY",
+        "CLAUDE_BASE_URL",
+        "OAUTH_TOKEN",
+        "CLAUDE_OAUTH_TOKEN",
+        "ANTHROPIC_OAUTH_TOKEN",
+    }
+)
 
-SAFE_STOP_REASONS: frozenset[str] = frozenset({
-    "end_turn",
-    "max_turns",
-    "stop_sequence",
-    "tool_use",
-    "cancelled",
-    "deadline_exceeded",
-    "budget_exceeded",
-    "provider_error",
-    "rate_limited",
-    "provider_stream_incomplete",
-    "credential_grant_inactive",
-    "missing_author_submission",
-})
+SAFE_STOP_REASONS: frozenset[str] = frozenset(
+    {
+        "end_turn",
+        "max_turns",
+        "stop_sequence",
+        "tool_use",
+        "cancelled",
+        "deadline_exceeded",
+        "budget_exceeded",
+        "provider_error",
+        "rate_limited",
+        "provider_stream_incomplete",
+        "credential_grant_inactive",
+        "missing_author_submission",
+    }
+)
 
 
 def _map_stop_reason(val: Any, is_error: bool = False, api_status: int | None = None) -> str:
@@ -253,6 +260,7 @@ class SDKRunner:
         """
         session = self._sessions.get(session_id)
         if session is None:
+
             async def _noop() -> None:
                 pass
 
@@ -302,7 +310,7 @@ class SDKRunner:
                 raise RunFailure("deadline_exceeded", status_code=504)
             try:
                 await asyncio.wait_for(spec.local_tools.start(), timeout=rem)
-            except (asyncio.TimeoutError, TimeoutError) as err:
+            except TimeoutError as err:
                 logger.error("Local tools startup timed out for session %s", spec.session_id)
                 if hasattr(spec.local_tools, "aclose"):
                     try:
@@ -353,6 +361,8 @@ class SDKRunner:
         has_text_content = False
         pending_tool_use = False
         result_seen = False
+        next_task = None
+        cancel_task = None
         last_lease_check = time.monotonic()
 
         try:
@@ -366,9 +376,7 @@ class SDKRunner:
                     local_tool_names = spec.local_tools.allowed_tool_names() or []
 
             merged_mcp = {**spec.mcp_servers, **local_mcp}
-            merged_allowed_tools = list(
-                dict.fromkeys(list(spec.allowed_tools or []) + list(local_tool_names or []))
-            )
+            merged_allowed_tools = list(dict.fromkeys(list(spec.allowed_tools or []) + list(local_tool_names or [])))
             allowed_tool_set = frozenset(merged_allowed_tools)
 
             # PreToolUse hook enforcing tool allowlist and local_tools.check_active
@@ -440,8 +448,8 @@ class SDKRunner:
                 "system_prompt": spec.system_prompt,
             }
 
-            if hasattr(spec, "agents") and getattr(spec, "agents"):
-                options_kwargs["agents"] = getattr(spec, "agents")
+            if hasattr(spec, "agents") and spec.agents:
+                options_kwargs["agents"] = spec.agents
 
             # No capability fallbacks in production: construct real HookMatcher and ClaudeAgentOptions
             try:
@@ -456,7 +464,11 @@ class SDKRunner:
             except RunFailure:
                 raise
             except Exception as err:
-                logger.error("SDK options/query initialization failed for session %s: %s", spec.session_id, type(err).__name__)
+                logger.error(
+                    "SDK options/query initialization failed for session %s: %s",
+                    spec.session_id,
+                    type(err).__name__,
+                )
                 raise RunFailure("sdk_initialization_failed", status_code=503) from err
 
             # Emit started ONLY once options/query are ready
@@ -582,7 +594,11 @@ class SDKRunner:
                 is_result_message = (
                     msg_type == "ResultMessage"
                     or (hasattr(message, "subtype") and hasattr(message, "duration_ms"))
-                    or (isinstance(message, dict) and "subtype" in message and ("duration_ms" in message or "is_error" in message))
+                    or (
+                        isinstance(message, dict)
+                        and "subtype" in message
+                        and ("duration_ms" in message or "is_error" in message)
+                    )
                 )
 
                 # 1. StreamEvent
@@ -711,7 +727,7 @@ class SDKRunner:
                     state = "failed"
                     stop_reason = "missing_author_submission"
 
-            accounting_complete = (state == "completed" and meter.is_accounting_complete())
+            accounting_complete = state == "completed" and meter.is_accounting_complete()
 
             yield RuntimeEvent(
                 kind="terminal",
@@ -737,6 +753,13 @@ class SDKRunner:
             raise
 
         finally:
+            pending_tasks = [task for task in (next_task, cancel_task) if task is not None]
+            for pending in pending_tasks:
+                if not pending.done():
+                    pending.cancel()
+            if pending_tasks:
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(asyncio.gather(*pending_tasks, return_exceptions=True), 1)
             if stream is not None:
                 if hasattr(stream, "interrupt") and (session_state.cancelled or state != "completed"):
                     try:

@@ -1,7 +1,7 @@
 """Playwright Chromium lifecycle, proxy configuration, and origin boundaries.
 
 Provenance:
-Adapted from /Users/ivanakimkin/Projects/ai-testcase-generator/test_importer_web/backend/src/tms/agents/sdk_runner/browser_tools.py.
+Adapted from TMS src/tms/agents/sdk_runner/browser_tools.py.
 Preserves Playwright context options, dialog handling, console collection, secret field masking,
 and same-origin navigation enforcement (returning 204 on prohibited navigation/redirects).
 Configures explicit proxy/bypass and chromium_sandbox=True.

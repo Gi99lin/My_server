@@ -94,7 +94,7 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
-      CONFIG_PATH: "/run/secrets/host-config.json"
+      CLAUDE_HOST_CONFIG: "/run/secrets/host-config.json"
       CLAUDE_CONFIG_DIR: "/var/lib/claude-auth"
       HTTP_PROXY: "http://${EGRESS_PROXY_IP:-172.31.240.35}:8080"
       HTTPS_PROXY: "http://${EGRESS_PROXY_IP:-172.31.240.35}:8080"
@@ -103,7 +103,7 @@ services:
       NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,172.31.240.20,172.31.240.21}"
       no_proxy: "${NO_PROXY:-localhost,127.0.0.1,172.31.240.20,172.31.240.21}"
     volumes:
-      - ${HOST_SECRETS_DIR:-./deploy/secrets_example}:/run/secrets:ro
+      - ${HOST_SECRETS_DIR:?Set HOST_SECRETS_DIR to an operator-owned directory outside Git}:/run/secrets:ro
       - claude-auth:/var/lib/claude-auth
       - claude-journal:/var/lib/claude-host
     tmpfs:
@@ -151,7 +151,7 @@ services:
       ROLE: egress
       PROXY_SUBNET: ${SDK_PROXY_SUBNET:-172.31.240.32/28}
       LISTEN_PORT: 8080
-      UPSTREAM_IPS: ${EGRESS_UPSTREAM_IP:-172.31.240.50}
+      UPSTREAM_IPS: ${EGRESS_UPSTREAM_IP:?Set numeric upstream proxy IP}
       UPSTREAM_PORTS: ${EGRESS_UPSTREAM_PORT:-1080}
     healthcheck:
       test: ["CMD", "nft", "list", "table", "inet", "netguard"]
@@ -180,7 +180,7 @@ services:
     security_opt:
       - no-new-privileges:true
     volumes:
-      - ${HOST_SECRETS_DIR:-./deploy/secrets_example}:/run/secrets:ro
+      - ${HOST_SECRETS_DIR:?Set HOST_SECRETS_DIR to an operator-owned directory outside Git}:/run/secrets:ro
     tmpfs:
       - /tmp:size=16M,mode=1777
     environment:
