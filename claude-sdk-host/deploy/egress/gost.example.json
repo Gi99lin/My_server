@@ -1,0 +1,10 @@
+{
+  "Debug": false,
+  "Retries": 3,
+  "ServeNodes": [
+    "http://:8080"
+  ],
+  "ChainNodes": [
+    "socks5://placeholder-user:placeholder-password@172.31.240.50:1080"
+  ]
+}
