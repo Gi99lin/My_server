@@ -6,50 +6,56 @@ Private, fail-closed runtime executor for the official Claude Agent SDK, Playwri
 
 ## 1. Architecture Overview
 
-The deployable stack is organized into a three-service unit within dedicated Docker networks:
+The deployable stack is organized into a four-service unit within dedicated Docker networks:
 
 ```
-+---------------------------------------------------------------------------------+
-| Docker Host Network Namespace                                                   |
-|                                                                                 |
-|  +---------------------------------------------------------------------------+  |
-|  | Shared Network Namespace (owned by sdk-netguard)                          |  |
-|  |                                                                           |  |
-|  |  +--------------------+         +-------------------------------------+   |  |
-|  |  | sdk-netguard       |         | claude-sdk-host                     |   |  |
-|  |  | - NET_ADMIN        |         | - Non-root pwuser (1000:1000)       |   |  |
-|  |  | - Atomic nftables  |         | - Chromium Sandbox (seccomp)        |   |  |
-|  |  | - Default DROP     |         | - Python 3.12 + FastAPI + Agent SDK |   |  |
-|  |  +---------+----------+         | - Private shm (512m), init: true    |   |  |
-|  |            |                    | - No Docker socket, cap_drop ALL    |   |  |
-|  |            |                    +------------------+------------------+   |  |
-|  +------------|---------------------------------------|----------------------+  |
-|               |                                       |                          |
-|    sdk_clients (172.31.240.0/28, internal)            |                          |
-|    sdk_tools   (172.31.240.16/28, internal)           |                          |
-|    sdk_proxy   (172.31.240.32/28, internal)           |                          |
-|               |                                       |                          |
-|  +------------v---------------------------------------v----------------------+  |
-|  | sdk-egress (172.31.240.35)                                                |  |
-|  | - GOST HTTP Frontend (:8080)                                               |  |
-|  | - Mandatory Upstream Chaining (SOCKS5/HTTP from secret config)            |  |
-|  | - No direct bypass; fail closed on absent secret or upstream              |  |
-|  | - No HTTP header or body logging                                          |  |
-|  +------------------------------------+--------------------------------------+  |
-|                                       |                                         |
-|    sdk_upstream (172.31.240.48/28)    |                                         |
-|                                       v                                         |
-|  +---------------------------------------------------------------------------+  |
-|  | Configured Upstream Proxy (External / Host SOCKS5/HTTP Exit)              |  |
-|  +---------------------------------------------------------------------------+  |
-+---------------------------------------------------------------------------------+
++---------------------------------------------------------------------------------------------------+
+| Docker Host Network Namespace                                                                     |
+|                                                                                                   |
+|  +---------------------------------------------------------------------------------------------+  |
+|  | Host Network Namespace (owned by sdk-netguard)                                              |  |
+|  |                                                                                             |  |
+|  |  +---------------------------+         +-------------------------------------------------+  |  |
+|  |  | sdk-netguard              |         | claude-sdk-host                                 |  |  |
+|  |  | - NET_ADMIN (only guard)  |         | - Non-root pwuser (1000:1000), read_only: true  |  |  |
+|  |  | - Atomic nftables inet    |         | - Playwright v1.64.1 seccomp profile            |  |  |
+|  |  | - Default DROP            |         | - Python 3.12 + FastAPI + Agent SDK             |  |  |
+|  |  | - /etc/hosts mounted      |         | - Private shm (512m), init: true, tmpfs work    |  |  |
+|  |  +-------------+-------------+         | - No Docker socket, cap_drop: [ALL]             |  |  |
+|  |                |                       +------------------------+------------------------+  |  |
+|  +----------------|------------------------------------------------|---------------------------+  |
+|                   |                                                |                              |
+|    sdk_clients (172.31.240.0/28, internal)                         |                              |
+|    sdk_tools   (172.31.240.16/28, internal)                        |                              |
+|    sdk_proxy   (172.31.240.32/28, internal)                        |                              |
+|                   |                                                |                              |
+|  +----------------v------------------------------------------------v---------------------------+  |
+|  | Egress Network Namespace (owned by sdk-egress-guard)                                         |  |
+|  |                                                                                             |  |
+|  |  +---------------------------+         +-------------------------------------------------+  |  |
+|  |  | sdk-egress-guard          |         | sdk-egress                                      |  |  |
+|  |  | - NET_ADMIN (only guard)  |         | - Unprivileged GOST v2 (:8080), read_only: true |  |  |
+|  |  | - Uplink strictly to      |         | - Mandatory Upstream Chaining (SOCKS5/HTTP)     |  |  |
+|  |  |   numeric upstream IP     |         | - No direct bypass; fail-closed on missing conf |  |  |
+|  |  | - Drops DNS, IPv6, UDP    |         | - Credential URL & header logging suppressed    |  |  |
+|  |  +-------------+-------------+         +-------------------------------------------------+  |  |
+|  +----------------|----------------------------------------------------------------------------+  |
+|                   |                                                                               |
+|    sdk_upstream (172.31.240.48/28, uplink)                                                        |
+|                   |                                                                               |
+|                   v                                                                               |
+|  +---------------------------------------------------------------------------------------------+  |
+|  | Configured Upstream Proxy (External / Host SOCKS5/HTTP Exit at numeric IP:port)             |  |
+|  +---------------------------------------------------------------------------------------------+  |
++---------------------------------------------------------------------------------------------------+
 ```
 
 ### Security & Isolation Principles
-- **Fail-Closed Networking**: `sdk-netguard` applies atomic nftables IPv4/IPv6 rules dropping all inbound and outbound traffic by default. Outbound direct external IPv4/IPv6, UDP/QUIC, and all DNS (including Docker resolver `127.0.0.11`) are dropped.
-- **Mandatory Egress Chaining**: All external traffic MUST transit through `sdk-egress` (GOST) to the configured upstream. If the upstream fails or secret config is missing, traffic fails closed.
-- **Unprivileged Execution**: `claude-sdk-host` runs as non-root `pwuser` (`1000:1000`), drops all capabilities (`cap_drop: [ALL]`), enables `no-new-privileges: true`, runs Chromium with its native sandbox via `deploy/seccomp/chromium.json`, mounts 512 MiB private shared memory, and has no Docker socket.
-- **Zero Secrets in Repository**: Secrets and credentials are provided exclusively via operator-mounted files outside the repository.
+- **Fail-Closed Networking**: `sdk-netguard` and `sdk-egress-guard` alone receive `NET_ADMIN`. They atomically apply managed `table inet netguard` rulesets (preserving Docker NAT), dropping all inbound and outbound traffic by default. Outbound direct external IPv4/IPv6, UDP/QUIC, and all DNS (including Docker resolver `127.0.0.11`) are dropped.
+- **Mandatory Egress Chaining & Guarded Uplink**: All external traffic from `claude-sdk-host` transits through `sdk-egress` (GOST) over internal `sdk_proxy`. `sdk-egress` is strictly isolated inside `sdk-egress-guard`'s namespace; its uplink is restricted at the packet level to only the configured numeric upstream proxy IP and port. No direct bypass is possible.
+- **Unprivileged Non-Root Execution**: Both `claude-sdk-host` and `sdk-egress` drop all Linux capabilities (`cap_drop: [ALL]`), enforce `no-new-privileges: true`, and have root filesystems mounted `read_only: true` with writable tmpfs mounts for `/tmp` and `/tmp/claude-host`.
+- **Official Playwright Seccomp Profile**: Uses the official pinned profile from `microsoft/playwright` tag `v1.64.1` (`deploy/seccomp/seccomp_profile.json`). No broad hand-written allowlists, `seccomp:unconfined`, `SYS_ADMIN`, host IPC, or `--no-sandbox` flags are used.
+- **Zero Secrets in Repository**: Secrets and credentials are provided exclusively via an operator-mounted directory outside the repository (`HOST_SECRETS_DIR`, mounted read-only as `/run/secrets`).
 
 ---
 
@@ -57,10 +63,10 @@ The deployable stack is organized into a three-service unit within dedicated Doc
 
 ### Network Subnets
 The stack reserves four non-overlapping `/28` CIDR blocks:
-- `sdk_clients` (`172.31.240.0/28`): Internal network connecting client applications (e.g. TMS) to the API.
-- `sdk_tools` (`172.31.240.16/28`): Internal network connecting netguard to registered tool/MCP/stand endpoints.
-- `sdk_proxy` (`172.31.240.32/28`): Internal network connecting netguard to `sdk-egress` (`172.31.240.35:8080`).
-- `sdk_upstream` (`172.31.240.48/28`): Uplink network connecting `sdk-egress` to the external upstream proxy.
+- `sdk_clients` (`172.31.240.0/28`, `internal: true`): Internal network connecting client applications (e.g. TMS) to the API.
+- `sdk_tools` (`172.31.240.16/28`, `internal: true`): Internal network connecting netguard to registered tool/MCP/stand endpoints.
+- `sdk_proxy` (`172.31.240.32/28`, `internal: true`): Internal network connecting netguard to `sdk-egress` (`172.31.240.35:8080`).
+- `sdk_upstream` (`172.31.240.48/28`, `internal: false`): Uplink network connecting `sdk-egress-guard` to the external upstream proxy.
 
 ---
 
@@ -81,20 +87,31 @@ Before creating networks or launching containers, run the preflight verification
    cp .env.example .env
    ```
 
-2. Prepare operator secret configuration files on the host (outside repository):
-   - `/etc/claude-sdk-host/secrets/host-config.json` (structure based on `config.example.json`)
-   - `/etc/claude-sdk-host/secrets/gost-config.json` (structure based on `deploy/egress/gost.example.json`)
+2. Prepare the operator secret directory outside Git (e.g. `/etc/claude-sdk-host/secrets/`):
+   - `host-config.json` (structure matching coordinator `Settings`, based on `config.example.json`)
+   - `gost-config.json` (structure based on `deploy/egress/gost.example.json`)
+   - `idempotency.key` (random secret key file >= 24 chars)
+   - `apps/tms-app.token` (token file for client app >= 24 chars)
+   - `providers/tms-credentials.token` (token file for credential provider >= 24 chars)
+   - `providers/tms-credentials-ca.crt` (custom CA certificate if required)
 
-3. Ensure secret file permissions are restricted:
+3. Ensure secret file permissions are readable by UID 1000 (`pwuser`):
    ```bash
-   chmod 600 /etc/claude-sdk-host/secrets/*.json
+   chmod 700 /etc/claude-sdk-host/secrets
+   chmod 644 /etc/claude-sdk-host/secrets/*.json /etc/claude-sdk-host/secrets/*.key
+   chmod 644 /etc/claude-sdk-host/secrets/apps/* /etc/claude-sdk-host/secrets/providers/*
+   ```
+
+4. Generate static internal hosts file:
+   ```bash
+   ./deploy/scripts/generate-peers.sh /etc/claude-sdk-host/secrets/host-config.json ./deploy/hosts
    ```
 
 ---
 
-## 5. Auth Volume Provisioning
+## 5. Auth & Journal Volume Provisioning
 
-The official authentication volume (`claude_sdk_auth`) must be initialized with explicit non-root ownership (`1000:1000`, `0700`) without opening unauthenticated network ports:
+Both the official authentication volume (`claude_sdk_auth`) and durable journal volume (`claude_sdk_journal`) must be initialized with explicit non-root ownership (`1000:1000`, `0700`) without opening unauthenticated network ports:
 
 ```bash
 ./deploy/scripts/provision-auth.sh
@@ -104,13 +121,13 @@ The official authentication volume (`claude_sdk_auth`) must be initialized with 
 
 ## 6. Official Claude Login Maintenance
 
-To authenticate your personal Claude subscription with the official Claude Code CLI:
+To authenticate your personal Claude subscription via the official Claude Code CLI:
 
 ```bash
 ./deploy/scripts/login-maintenance.sh
 ```
 
-This starts a one-off interactive maintenance container attached to `sdk_proxy`, runs official `claude login`, and stores the refreshable session tokens safely in `claude_sdk_auth`. No tokens are printed or stored in git.
+This runs an interactive session strictly inside the guarded SDK namespace (inheriting the same auth volume, netguard firewall, and egress proxy). It dynamically discovers the bundled Claude Code CLI binary inside `claude-agent-sdk` via Python (rather than assuming a global `claude` binary on PATH) and executes `auth login`. It does not print `HTTP_PROXY` or read/print any credentials.
 
 ---
 
@@ -125,7 +142,7 @@ docker compose build
 Verify the host configuration secret without running the API service:
 ```bash
 docker run --rm \
-  -v /etc/claude-sdk-host/secrets/host-config.json:/run/secrets/host-config.json:ro \
+  -v /etc/claude-sdk-host/secrets:/run/secrets:ro \
   claude-sdk-host:local \
   check-config --config /run/secrets/host-config.json
 ```
@@ -141,9 +158,10 @@ docker compose up -d
 
 ### Health Check Gating
 Startup is strictly gated:
-1. `sdk-netguard` loads nftables ruleset and reports healthy.
-2. `sdk-egress` verifies secret configuration, connects upstream, and reports healthy.
-3. `claude-sdk-host` starts only after both sidecars are healthy.
+1. `sdk-netguard` loads atomic nftables ruleset and reports healthy.
+2. `sdk-egress-guard` loads uplink restriction ruleset and reports healthy.
+3. `sdk-egress` validates secret configuration, verifies upstream chaining, and reports healthy.
+4. `claude-sdk-host` starts only after both netguard and egress are healthy.
 
 Check status:
 ```bash
@@ -157,11 +175,15 @@ If local host debugging is needed, bind the API to loopback (`127.0.0.1:8080`) u
 docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d
 ```
 
-### Drain, Cancel & Recreate Whole Namespace
-When performing maintenance or updating configuration, recreate the stack atomically to avoid unmanaged network namespaces:
+### Graceful Drain, Cancel & Recreate
+To drain in-flight sessions and recreate the namespace unit according to coordinator process contracts:
 ```bash
 ./deploy/scripts/drain-recreate.sh
 ```
+1. Sends `SIGUSR1` to `claude-sdk-host` to set `draining: true` (rejecting new incoming requests).
+2. Executes an in-container urllib probe to `http://127.0.0.1:8080/health/live` to poll `active == 0` and `queued == 0` within a bounded timeout (`DRAIN_TIMEOUT_SECONDS`, default 60s).
+3. If timeout expires, proceeds with `SIGTERM` shutdown.
+4. Tears down existing namespace containers and recreates the stack (`docker compose down` then `docker compose up -d`). Note that teardown and startup are distinct, sequential operations rather than an atomic kernel operation.
 
 ---
 
@@ -171,7 +193,7 @@ When performing maintenance or updating configuration, recreate the stack atomic
 
 ### 1. Health Endpoints
 ```bash
-# Liveness probe
+# Liveness probe (exposes active, queued, draining)
 curl -s http://claude-sdk-host:8080/health/live
 
 # Readiness probe (verifies nftables, proxy reachability, auth state)
@@ -184,7 +206,7 @@ curl -s -X POST http://claude-sdk-host:8080/v1/chat/completions \
   -H "Authorization: Bearer <APP_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "claude-personal-default",
+    "model": "claude-sonnet-5-5",
     "messages": [
       {"role": "user", "content": "Write three test cases for password reset."}
     ],
@@ -199,7 +221,7 @@ curl -s -X POST http://claude-sdk-host:8080/v1/agent-sessions \
   -H "Content-Type: application/json" \
   -d '{
     "client_request_id": "req-001",
-    "model": "claude-personal-default",
+    "model": "claude-sonnet-5-5",
     "profile": "tms-execution",
     "task_prompt": "Run UI sanity inspection on stand.",
     "deadline_seconds": 600,
@@ -232,4 +254,4 @@ Run full synthetic smoke verification without connecting to a Docker daemon or r
 ```bash
 ./deploy/scripts/smoke-test.sh
 ```
-This tests shell syntax for all scripts (`bash -n`), verifies JSON configuration templates (`jq`), and runs `docker compose config` against temporary mock secret files.
+This tests shell syntax for all scripts (`bash -n`), verifies JSON configuration templates (`jq`), tests static peers generation, and runs `docker compose config` against temporary mock secret files.

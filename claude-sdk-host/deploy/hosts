@@ -1,0 +1,9 @@
+# Static internal peer mappings (Generated from config.example.json)
+# DO NOT ADD RFC1918 WILDCARDS OR DIRECT ROUTES
+127.0.0.1       localhost
+::1             localhost ip6-localhost ip6-loopback
+
+172.31.240.2    claude-sdk-host
+172.31.240.35   sdk-egress
+172.31.240.20    mcp-endpoint-172.31.240.20
+172.31.240.21    credential-provider-172.31.240.21

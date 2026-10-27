@@ -1,15 +1,16 @@
 # ==============================================================================
 # Claude SDK Host Stack
 #
-# Three-service layout:
-# 1. sdk-netguard: Namespace owner with NET_ADMIN and atomic nftables default-drop
+# Four-service layout:
+# 1. sdk-netguard: Host namespace owner (NET_ADMIN, atomic nftables default-drop)
 # 2. claude-sdk-host: Unprivileged API & SDK/browser executor (network_mode: service:sdk-netguard)
-# 3. sdk-egress: Internal forwarder enforcing mandatory upstream proxy chaining (no direct egress)
+# 3. sdk-egress-guard: Egress namespace owner (NET_ADMIN, strictly restricts uplink to upstream proxy)
+# 4. sdk-egress: Unprivileged forwarder enforcing mandatory upstream chaining (network_mode: service:sdk-egress-guard)
 # ==============================================================================
 
 services:
   # ----------------------------------------------------------------------------
-  # 1. Network Namespace Guard (Namespace Owner)
+  # 1. Network Namespace Guard for Host (Namespace Owner for claude-sdk-host)
   # ----------------------------------------------------------------------------
   sdk-netguard:
     build:
@@ -18,6 +19,7 @@ services:
     image: claude-sdk-netguard:local
     container_name: claude-sdk-netguard
     restart: unless-stopped
+    read_only: true
     cap_drop:
       - ALL
     cap_add:
@@ -27,11 +29,22 @@ services:
     networks:
       sdk_clients:
         ipv4_address: ${NETGUARD_CLIENTS_IP:-172.31.240.2}
+        aliases:
+          - claude-sdk-host
       sdk_tools:
         ipv4_address: ${NETGUARD_TOOLS_IP:-172.31.240.18}
+        aliases:
+          - claude-sdk-host
       sdk_proxy:
         ipv4_address: ${NETGUARD_PROXY_IP:-172.31.240.34}
+        aliases:
+          - claude-sdk-host
+    volumes:
+      - ${HOSTS_FILE:-./deploy/hosts}:/etc/hosts:ro
+    tmpfs:
+      - /tmp:size=16M,mode=1777
     environment:
+      ROLE: host
       CLIENTS_SUBNET: ${SDK_CLIENTS_SUBNET:-172.31.240.0/28}
       TOOLS_SUBNET: ${SDK_TOOLS_SUBNET:-172.31.240.16/28}
       PROXY_IP: ${EGRESS_PROXY_IP:-172.31.240.35}
@@ -65,11 +78,12 @@ services:
     init: true
     ipc: private
     shm_size: ${HOST_SHM_SIZE:-512m}
+    read_only: true
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
-      - seccomp:deploy/seccomp/chromium.json
+      - seccomp:deploy/seccomp/seccomp_profile.json
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     deploy:
       resources:
@@ -86,16 +100,14 @@ services:
       HTTPS_PROXY: "http://${EGRESS_PROXY_IP:-172.31.240.35}:8080"
       http_proxy: "http://${EGRESS_PROXY_IP:-172.31.240.35}:8080"
       https_proxy: "http://${EGRESS_PROXY_IP:-172.31.240.35}:8080"
-      NO_PROXY: "localhost,127.0.0.1,172.31.240.0/28,172.31.240.16/28"
-      no_proxy: "localhost,127.0.0.1,172.31.240.0/28,172.31.240.16/28"
-    secrets:
-      - source: host-config
-        target: /run/secrets/host-config.json
-        mode: 0400
+      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,172.31.240.20,172.31.240.21}"
+      no_proxy: "${NO_PROXY:-localhost,127.0.0.1,172.31.240.20,172.31.240.21}"
     volumes:
+      - ${HOST_SECRETS_DIR:-./deploy/secrets_example}:/run/secrets:ro
       - claude-auth:/var/lib/claude-auth
       - claude-journal:/var/lib/claude-host
     tmpfs:
+      - /tmp:size=512M,mode=1777
       - /tmp/claude-host:size=256M,mode=1777
     command: ["serve"]
     healthcheck:
@@ -106,7 +118,50 @@ services:
       start_period: 5s
 
   # ----------------------------------------------------------------------------
-  # 3. Egress Proxy Forwarder (Mandatory Upstream Chaining)
+  # 3. Network Namespace Guard for Egress (Namespace Owner for sdk-egress)
+  # ----------------------------------------------------------------------------
+  sdk-egress-guard:
+    build:
+      context: .
+      dockerfile: deploy/netguard/Dockerfile
+    image: claude-sdk-netguard:local
+    container_name: claude-sdk-egress-guard
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      sdk_proxy:
+        ipv4_address: ${EGRESS_PROXY_IP:-172.31.240.35}
+        aliases:
+          - sdk-egress
+      sdk_upstream:
+        ipv4_address: ${EGRESS_UPSTREAM_CLIENT_IP:-172.31.240.50}
+        aliases:
+          - sdk-egress
+    volumes:
+      - ${HOSTS_FILE:-./deploy/hosts}:/etc/hosts:ro
+    tmpfs:
+      - /tmp:size=16M,mode=1777
+    environment:
+      ROLE: egress
+      PROXY_SUBNET: ${SDK_PROXY_SUBNET:-172.31.240.32/28}
+      LISTEN_PORT: 8080
+      UPSTREAM_IPS: ${EGRESS_UPSTREAM_IP:-172.31.240.50}
+      UPSTREAM_PORTS: ${EGRESS_UPSTREAM_PORT:-1080}
+    healthcheck:
+      test: ["CMD", "nft", "list", "table", "inet", "netguard"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 2s
+
+  # ----------------------------------------------------------------------------
+  # 4. Egress Proxy Forwarder (Unprivileged GOST with Mandatory Upstream Chaining)
   # ----------------------------------------------------------------------------
   sdk-egress:
     build:
@@ -115,19 +170,19 @@ services:
     image: claude-sdk-egress:local
     container_name: claude-sdk-egress
     restart: unless-stopped
+    network_mode: "service:sdk-egress-guard"
+    depends_on:
+      sdk-egress-guard:
+        condition: service_healthy
+    read_only: true
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
-    networks:
-      sdk_proxy:
-        ipv4_address: ${EGRESS_PROXY_IP:-172.31.240.35}
-      sdk_upstream:
-        ipv4_address: ${EGRESS_UPSTREAM_IP:-172.31.240.50}
-    secrets:
-      - source: gost-config
-        target: /run/secrets/gost-config.json
-        mode: 0400
+    volumes:
+      - ${HOST_SECRETS_DIR:-./deploy/secrets_example}:/run/secrets:ro
+    tmpfs:
+      - /tmp:size=16M,mode=1777
     environment:
       CONFIG_FILE: "/run/secrets/gost-config.json"
     healthcheck:
@@ -174,7 +229,7 @@ networks:
         - subnet: ${SDK_PROXY_SUBNET:-172.31.240.32/28}
           gateway: ${SDK_PROXY_GATEWAY:-172.31.240.33}
 
-  # Uplink: sdk-egress connection to the external/host upstream proxy
+  # Uplink: sdk-egress-guard connection to external/host upstream proxy
   sdk_upstream:
     name: claude_sdk_upstream
     driver: bridge
@@ -195,12 +250,3 @@ volumes:
   # SQLite durable journal and accounting database
   claude-journal:
     name: claude_sdk_journal
-
-# ==============================================================================
-# Secret Declarations
-# ==============================================================================
-secrets:
-  host-config:
-    file: ${HOST_CONFIG_PATH:-./config.example.json}
-  gost-config:
-    file: ${GOST_CONFIG_PATH:-./deploy/egress/gost.example.json}

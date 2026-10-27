@@ -1,0 +1,47 @@
+{
+  "auth_dir": "/var/lib/claude-auth",
+  "journal_path": "/var/lib/claude-host/journal.sqlite3",
+  "work_dir": "/tmp/claude-host",
+  "proxy_url": "http://172.31.240.35:8080",
+  "proxy_bypass": [
+    "localhost",
+    "127.0.0.1",
+    "172.31.240.20",
+    "172.31.240.21"
+  ],
+  "models": {
+    "claude-sonnet-5-5": "claude-sonnet-5-5",
+    "claude-haiku": "claude-haiku"
+  },
+  "applications": [
+    {
+      "id": "tms-app",
+      "owner": "operator@example.internal",
+      "token_file": "/run/secrets/apps/tms-app.token",
+      "scopes": [
+        "completion",
+        "session:create",
+        "session:read",
+        "session:cancel"
+      ],
+      "models": [
+        "claude-sonnet-5-5",
+        "claude-haiku"
+      ],
+      "mcp_endpoints": [
+        "http://172.31.240.20:8000/mcp/tms-execution"
+      ],
+      "credential_providers": [
+        "tms-credentials"
+      ]
+    }
+  ],
+  "credential_providers": {
+    "tms-credentials": {
+      "url": "https://172.31.240.21:8443/api/v1/internal/claude-host/credentials",
+      "token_file": "/run/secrets/providers/tms-credentials.token",
+      "ca_file": "/run/secrets/providers/tms-credentials-ca.crt"
+    }
+  },
+  "idempotency_key_file": "/run/secrets/idempotency.key"
+}

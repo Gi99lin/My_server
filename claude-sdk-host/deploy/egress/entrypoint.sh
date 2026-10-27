@@ -4,12 +4,13 @@ set -euo pipefail
 # ==============================================================================
 # sdk-egress entrypoint
 # Validates secret configuration and executes GOST with mandatory upstream chaining.
-# Fails closed on absent secrets, invalid config, or attempted debug body logging.
+# Fails closed on absent secrets, invalid config, query options, or bypass attempts.
+# Never prints ChainNode strings (may contain credentials) or request headers.
 # ==============================================================================
 
 CONFIG_FILE="${CONFIG_FILE:-/run/secrets/gost-config.json}"
 
-echo "[sdk-egress] Starting egress forwarder check..."
+echo "[sdk-egress] Starting egress forwarder validation..."
 
 # 1. Fail closed on absent or empty secret configuration
 if [ ! -f "$CONFIG_FILE" ]; then
@@ -22,56 +23,80 @@ if [ ! -s "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-# 2. Validate JSON syntax without eval
-if command -v jq >/dev/null 2>&1; then
-    if ! jq empty "$CONFIG_FILE" >/dev/null 2>&1; then
-        echo "[sdk-egress] FATAL: Invalid JSON in '$CONFIG_FILE'! Failing closed." >&2
-        exit 1
-    fi
-
-    # Verify Debug logging is false (strictly prohibit HTTP body/header logging)
-    DEBUG_VAL=$(jq -r '.Debug // false' "$CONFIG_FILE")
-    if [ "$DEBUG_VAL" = "true" ]; then
-        echo "[sdk-egress] FATAL: Debug logging enabled in '$CONFIG_FILE'! Header/body logging is forbidden." >&2
-        exit 1
-    fi
-
-    # Verify ServeNodes contains HTTP frontend
-    SERVE_COUNT=$(jq '.ServeNodes | length' "$CONFIG_FILE")
-    if [ "$SERVE_COUNT" -lt 1 ]; then
-        echo "[sdk-egress] FATAL: No ServeNodes defined in '$CONFIG_FILE'." >&2
-        exit 1
-    fi
-
-    # Verify ChainNodes contains mandatory upstream
-    CHAIN_COUNT=$(jq '.ChainNodes | length' "$CONFIG_FILE")
-    if [ "$CHAIN_COUNT" -lt 1 ]; then
-        echo "[sdk-egress] FATAL: No ChainNodes defined in '$CONFIG_FILE'! Mandatory upstream required." >&2
-        exit 1
-    fi
-
-    # Verify each ChainNode has a valid upstream protocol (socks5 or http)
-    for i in $(seq 0 $((CHAIN_COUNT - 1))); do
-        NODE_URL=$(jq -r ".ChainNodes[$i]" "$CONFIG_FILE")
-        if [[ ! "$NODE_URL" =~ ^(socks5|http|https):// ]]; then
-            echo "[sdk-egress] FATAL: Invalid upstream node protocol in ChainNodes[$i]: '$NODE_URL'" >&2
-            exit 1
-        fi
-    done
-else
-    # Fallback syntax check if jq is not present
-    if ! grep -q '"ChainNodes"' "$CONFIG_FILE"; then
-        echo "[sdk-egress] FATAL: Missing 'ChainNodes' in '$CONFIG_FILE'." >&2
-        exit 1
-    fi
-    if grep -q '"Debug"[[:space:]]*:[[:space:]]*true' "$CONFIG_FILE"; then
-        echo "[sdk-egress] FATAL: Debug logging enabled in '$CONFIG_FILE'." >&2
-        exit 1
-    fi
+# 2. Validate JSON syntax using jq (no debug fallback grep parser)
+if ! command -v jq >/dev/null 2>&1; then
+    echo "[sdk-egress] FATAL: jq utility is required for secure JSON validation. Failing closed." >&2
+    exit 1
 fi
 
-echo "[sdk-egress] Configuration validated successfully. Mandatory upstream chaining enforced."
-echo "[sdk-egress] Launching GOST forwarder..."
+if ! jq empty "$CONFIG_FILE" >/dev/null 2>&1; then
+    echo "[sdk-egress] FATAL: Invalid JSON syntax in '$CONFIG_FILE'! Failing closed." >&2
+    exit 1
+fi
 
-# Execute GOST with secret configuration file
-exec /usr/local/bin/gost -C "$CONFIG_FILE"
+# Verify Debug logging is false (strictly prohibit HTTP body/header debug logging)
+DEBUG_VAL=$(jq -r '.Debug // empty' "$CONFIG_FILE")
+if [ "$DEBUG_VAL" != "false" ]; then
+    echo "[sdk-egress] FATAL: 'Debug' must be explicitly set to false. Header/body logging forbidden." >&2
+    exit 1
+fi
+
+# Reject bypass or direct route configurations
+BYPASS_VAL=$(jq -r '.Bypass // empty' "$CONFIG_FILE")
+ROUTES_VAL=$(jq -r '.Routes // empty' "$CONFIG_FILE")
+if [ -n "$BYPASS_VAL" ] || [ -n "$ROUTES_VAL" ]; then
+    echo "[sdk-egress] FATAL: Bypass or Routes configurations are forbidden. Mandatory chaining required." >&2
+    exit 1
+fi
+
+# Verify ServeNodes contains exactly one HTTP listener
+SERVE_COUNT=$(jq '.ServeNodes | length' "$CONFIG_FILE" 2>/dev/null || echo 0)
+if [ "$SERVE_COUNT" -ne 1 ]; then
+    echo "[sdk-egress] FATAL: Exactly one HTTP listener required in ServeNodes (found: $SERVE_COUNT)." >&2
+    exit 1
+fi
+
+SERVE_NODE=$(jq -r '.ServeNodes[0]' "$CONFIG_FILE")
+if [[ "$SERVE_NODE" == *"?"* ]]; then
+    echo "[sdk-egress] FATAL: Query options in ServeNodes are forbidden." >&2
+    exit 1
+fi
+
+if [[ ! "$SERVE_NODE" =~ ^http://(:[0-9]+|[0-9\.]+:[0-9]+)$ ]]; then
+    echo "[sdk-egress] FATAL: ServeNode must be an HTTP listener (e.g. http://:8080)." >&2
+    exit 1
+fi
+
+# Verify ChainNodes contains exactly one configured supported parent
+CHAIN_COUNT=$(jq '.ChainNodes | length' "$CONFIG_FILE" 2>/dev/null || echo 0)
+if [ "$CHAIN_COUNT" -ne 1 ]; then
+    echo "[sdk-egress] FATAL: Exactly one parent upstream proxy required in ChainNodes (found: $CHAIN_COUNT)." >&2
+    exit 1
+fi
+
+CHAIN_NODE=$(jq -r '.ChainNodes[0]' "$CONFIG_FILE")
+if [[ "$CHAIN_NODE" == *"?"* ]]; then
+    echo "[sdk-egress] FATAL: Query options in ChainNodes are forbidden." >&2
+    exit 1
+fi
+
+# Reject direct/bypass in chain
+if [[ "$CHAIN_NODE" == *"direct"* ]] || [[ "$CHAIN_NODE" == *"bypass"* ]]; then
+    echo "[sdk-egress] FATAL: Direct or bypass routes in ChainNodes are forbidden." >&2
+    exit 1
+fi
+
+# Verify supported parent proxy scheme (socks5, http, https) without printing the node string
+if [[ ! "$CHAIN_NODE" =~ ^(socks5|http|https):// ]]; then
+    echo "[sdk-egress] FATAL: Unsupported parent proxy scheme in ChainNodes. Only socks5, http, or https allowed." >&2
+    exit 1
+fi
+
+echo "[sdk-egress] Configuration successfully validated. Mandatory upstream chaining enforced."
+echo "[sdk-egress] Launching GOST forwarder (suppressing credential URLs and authorization headers)..."
+
+# Execute GOST while suppressing untrusted request/error logs containing headers or credential URLs
+exec /usr/local/bin/gost -C "$CONFIG_FILE" 2>&1 | sed -u -E \
+    -e 's#://[^:@/]+:[^@/]+@#://[REDACTED]@#g' \
+    -e 's#([Pp]roxy-)?[Aa]uthorization:.*#[REDACTED]#' \
+    -e 's#auth=[^& ]*#auth=[REDACTED]#g'

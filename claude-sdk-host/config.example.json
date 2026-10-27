@@ -1,20 +1,17 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "comment": "Example configuration for Claude SDK Host. Secret files must reside outside repository.",
   "auth_dir": "/var/lib/claude-auth",
-  "journal_path": "/var/lib/claude-host/journal.db",
+  "journal_path": "/var/lib/claude-host/journal.sqlite3",
   "work_dir": "/tmp/claude-host",
   "proxy_url": "http://172.31.240.35:8080",
   "proxy_bypass": [
     "localhost",
     "127.0.0.1",
-    "172.31.240.0/28",
-    "172.31.240.16/28"
+    "172.31.240.20",
+    "172.31.240.21"
   ],
   "models": {
-    "claude-personal-default": "claude-3-5-sonnet-20241022",
-    "claude-sonnet": "claude-3-5-sonnet-20241022",
-    "claude-haiku": "claude-3-5-haiku-20241022"
+    "claude-sonnet-5-5": "claude-sonnet-5-5",
+    "claude-haiku": "claude-haiku"
   },
   "applications": [
     {
@@ -28,20 +25,23 @@
         "session:cancel"
       ],
       "models": [
-        "claude-personal-default",
-        "claude-sonnet",
+        "claude-sonnet-5-5",
         "claude-haiku"
       ],
       "mcp_endpoints": [
-        "http://172.31.240.20:8000/sse"
+        "http://172.31.240.20:8000/mcp/tms-execution"
+      ],
+      "credential_providers": [
+        "tms-credentials"
       ]
     }
   ],
   "credential_providers": {
     "tms-credentials": {
-      "url": "https://172.31.240.21:8443",
+      "url": "https://172.31.240.21:8443/api/v1/internal/claude-host/credentials",
       "token_file": "/run/secrets/providers/tms-credentials.token",
       "ca_file": "/run/secrets/providers/tms-credentials-ca.crt"
     }
-  }
+  },
+  "idempotency_key_file": "/run/secrets/idempotency.key"
 }

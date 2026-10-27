@@ -1,5 +1,6 @@
 # Pinned Playwright Python image based on Ubuntu 24.04 (noble) with Python 3.12
-FROM mcr.microsoft.com/playwright/python:v1.49.1-noble
+# Matching coordinator dependency pin: playwright==1.64.1
+FROM mcr.microsoft.com/playwright/python:v1.64.1-noble
 
 # Prevent interactive prompts and configure Python environment
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -26,6 +27,7 @@ WORKDIR /app
 COPY --chown=pwuser:pwuser . /app
 
 # Build and install package at build time. No runtime network installations or updates permitted.
+# Official Claude Code CLI is bundled inside claude-agent-sdk wheel; do not install another global CLI.
 RUN pip install --no-cache-dir .
 
 # Switch to unprivileged non-root user

@@ -15,7 +15,7 @@ echo "Working directory: $HOST_DIR"
 cd "$HOST_DIR"
 
 # 1. Validate Shell syntax of all entrypoints and helper scripts
-echo "[1/4] Validating shell syntax of all scripts..."
+echo "[1/5] Validating shell syntax of all scripts..."
 SCRIPTS=(
     "deploy/netguard/entrypoint.sh"
     "deploy/egress/entrypoint.sh"
@@ -38,56 +38,48 @@ for s in "${SCRIPTS[@]}"; do
     fi
 done
 
-# 2. Validate JSON syntax of example configurations
-echo "[2/4] Validating JSON schema & syntax of example configurations..."
+# 2. Validate JSON syntax of example configurations and seccomp profile
+echo "[2/5] Validating JSON schema & syntax of configurations..."
 if command -v jq >/dev/null 2>&1; then
     jq empty config.example.json
     echo "  [OK] config.example.json is valid JSON"
     jq empty deploy/egress/gost.example.json
     echo "  [OK] deploy/egress/gost.example.json is valid JSON"
-    jq empty deploy/seccomp/chromium.json
-    echo "  [OK] deploy/seccomp/chromium.json is valid JSON"
+    jq empty deploy/seccomp/seccomp_profile.json
+    echo "  [OK] deploy/seccomp/seccomp_profile.json is valid JSON"
 else
     echo "  [INFO] jq not installed; verified basic non-empty files."
 fi
 
-# 3. Create isolated disposable mock configuration and run docker compose config
-echo "[3/4] Testing Compose interpolation with disposable mock secret files..."
+# 3. Test static peers generation
+echo "[3/5] Testing static peers generation..."
+./deploy/scripts/generate-peers.sh config.example.json "$HOST_DIR/deploy/hosts"
+echo "  [OK] deploy/hosts successfully generated"
+
+# 4. Create isolated disposable mock secrets directory and run docker compose config
+echo "[4/5] Testing Compose interpolation with disposable mock secret files..."
 TMP_DIR=$(mktemp -d)
-trap 'rm -rf "$TMP_DIR"' EXIT
+trap 'chmod -R u+rwX "$TMP_DIR" 2>/dev/null || true; rm -rf "$TMP_DIR"' EXIT
 
-MOCK_HOST_CONFIG="$TMP_DIR/mock-host-config.json"
-MOCK_GOST_CONFIG="$TMP_DIR/mock-gost-config.json"
+MOCK_SECRETS_DIR="$TMP_DIR/secrets"
+mkdir -p "$MOCK_SECRETS_DIR/apps" "$MOCK_SECRETS_DIR/providers"
 
-cat <<EOF > "$MOCK_HOST_CONFIG"
-{
-  "auth_dir": "/var/lib/claude-auth",
-  "journal_path": "/var/lib/claude-host/journal.db",
-  "work_dir": "/tmp/claude-host",
-  "proxy_url": "http://172.31.240.35:8080",
-  "proxy_bypass": ["localhost", "127.0.0.1"],
-  "models": {"claude-personal-default": "claude-3-5-sonnet-20241022"},
-  "applications": [],
-  "credential_providers": {}
-}
-EOF
+cp config.example.json "$MOCK_SECRETS_DIR/host-config.json"
+cp deploy/egress/gost.example.json "$MOCK_SECRETS_DIR/gost-config.json"
+echo "mock-idempotency-key-placeholder-32-chars" > "$MOCK_SECRETS_DIR/idempotency.key"
+echo "mock-app-token-placeholder-32-chars-long" > "$MOCK_SECRETS_DIR/apps/tms-app.token"
+echo "mock-provider-token-placeholder-32-chars" > "$MOCK_SECRETS_DIR/providers/tms-credentials.token"
+echo "mock-ca-cert-placeholder" > "$MOCK_SECRETS_DIR/providers/tms-credentials-ca.crt"
+find "$MOCK_SECRETS_DIR" -type d -exec chmod 755 {} +
+find "$MOCK_SECRETS_DIR" -type f -exec chmod 644 {} +
 
-cat <<EOF > "$MOCK_GOST_CONFIG"
-{
-  "Debug": false,
-  "Retries": 1,
-  "ServeNodes": ["http://:8080"],
-  "ChainNodes": ["socks5://mock-user:mock-pass@172.31.240.50:1080"]
-}
-EOF
-
-HOST_CONFIG_PATH="$MOCK_HOST_CONFIG" GOST_CONFIG_PATH="$MOCK_GOST_CONFIG" \
+HOST_SECRETS_DIR="$MOCK_SECRETS_DIR" \
     docker compose config >/dev/null
 
-echo "  [OK] docker compose config passed with isolated mock secrets."
+echo "  [OK] docker compose config passed with isolated mock secrets directory."
 
-# 4. Verify Dockerfile syntax
-echo "[4/4] Verifying Dockerfile layout..."
+# 5. Verify Dockerfile layout
+echo "[5/5] Verifying Dockerfile layout..."
 [ -f Dockerfile ] && echo "  [OK] claude-sdk-host/Dockerfile found."
 [ -f deploy/netguard/Dockerfile ] && echo "  [OK] deploy/netguard/Dockerfile found."
 [ -f deploy/egress/Dockerfile ] && echo "  [OK] deploy/egress/Dockerfile found."

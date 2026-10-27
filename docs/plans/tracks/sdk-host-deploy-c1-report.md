@@ -1,82 +1,154 @@
-# Deployment Lane, Cycle 1 Report
+# Deployment Lane, Cycle 1 Report (Correction)
 
 - **Date:** 2026-10-27
 - **Branch:** `codex/sdk-deploy`
 - **Lane:** Deploy (`deploy`)
-- **Assigned Brief:** `docs/plans/tracks/sdk-host-deploy-c1.md`
+- **Assigned Brief:** `docs/plans/tracks/sdk-host-deploy-c1-correction.md`
 - **Status:** Complete (Ready for Coordinator verification and integration)
 
 ---
 
-## 1. Summary of Implemented Components
+## 1. Summary of Implemented Components & Corrections
 
-In accordance with `docs/plans/2026-10-27-sdk-host-charter.md`, `docs/superpowers/plans/2026-10-27-claude-sdk-host.md`, and `docs/superpowers/specs/2026-10-27-claude-sdk-host-design.md`, the deployment producer was fully implemented strictly within the assigned ownership boundary (`claude-sdk-host/Dockerfile`, `.dockerignore`, `docker-compose.yml`, `docker-compose.debug.yml`, `.env.example`, `config.example.json`, `README.md`, `deploy/`, and this report). No application Python modules or package metadata were modified; `src/claude_host/contracts.py` remains frozen and untouched.
+In accordance with `docs/plans/tracks/sdk-host-deploy-c1-correction.md`, the deployment producer was corrected and completed strictly within assigned ownership boundaries (`claude-sdk-host/Dockerfile`, `.dockerignore`, `docker-compose.yml`, `docker-compose.debug.yml`, `.env.example`, `config.example.json`, `README.md`, `deploy/`, and this report). Application Python code in `src/claude_host/` remains frozen and untouched.
 
-### Implemented Files:
-1. `claude-sdk-host/Dockerfile`:
-   - Based on official pinned Playwright Python image `mcr.microsoft.com/playwright/python:v1.49.1-noble` (Ubuntu 24.04 noble with Python 3.12).
-   - Non-root `USER pwuser` (UID 1000, GID 1000).
-   - Pre-creates `/var/lib/claude-auth` (0700), `/var/lib/claude-host` (0700), `/tmp/claude-host` (1777), `/app` with `pwuser:pwuser` ownership.
-   - Installs package via `pip install --no-cache-dir .` at build time; prohibits runtime network installs.
-   - Default entrypoint: `python -m claude_host`, default command: `serve`.
+### Concrete Findings Resolved:
 
-2. `claude-sdk-host/.dockerignore`:
-   - Excludes Python caches, virtual environments, VCS metadata, documentation, and deployment configs from image context.
+1. **Playwright Pinning (Finding 1)**:
+   - Updated `claude-sdk-host/Dockerfile` base image from `v1.49.1-noble` to the official matching pinned release `mcr.microsoft.com/playwright/python:v1.64.1-noble` (Ubuntu 24.04 noble with Python 3.12), matching coordinator's `playwright==1.64.1` and `claude-agent-sdk==0.2.174`.
+   - No external or global CLI packages are installed at image build or runtime; the official Claude Code CLI bundled in `claude-agent-sdk` wheel is utilized.
 
-3. `claude-sdk-host/docker-compose.yml`:
-   - Three-service architecture:
-     1. `sdk-netguard`: Network namespace owner, alone possesses `cap_add: [NET_ADMIN]`, applies atomic nftables IPv4/IPv6 default-drop ruleset before healthy.
-     2. `claude-sdk-host`: Uses `network_mode: "service:sdk-netguard"`, depends on `sdk-netguard` and `sdk-egress` healthy. `init: true`, `cap_drop: [ALL]`, `no-new-privileges: true`, Chromium sandbox seccomp profile, private `shm_size: 512m`, `ipc: private`, no host IPC/root/SYS_ADMIN/Docker socket, bounded to 2 CPUs, 4 GiB memory, 512 PIDs.
-     3. `sdk-egress`: GOST HTTP forwarder (`:8080`) enforcing mandatory upstream proxy chaining from secret `/run/secrets/gost-config.json`. Independent network guard fails closed on missing secrets or invalid configuration; prohibits HTTP header/body logging.
-   - Four dedicated non-overlapping `/28` subnets:
-     - `sdk_clients` (`172.31.240.0/28`, `internal: true`)
-     - `sdk_tools` (`172.31.240.16/28`, `internal: true`)
-     - `sdk_proxy` (`172.31.240.32/28`, `internal: true`)
-     - `sdk_upstream` (`172.31.240.48/28`, bridge uplink)
-   - Zero published ports by default.
+2. **Fourth Sidecar: Dedicated Egress Guard (Finding 2)**:
+   - Recorded and implemented the fourth sidecar container `sdk-egress-guard` as a necessary correction to the earlier three-service simplification.
+   - `sdk-egress-guard` uses the same netguard image and owns the network namespace for `sdk-egress` (`network_mode: service:sdk-egress-guard`).
+   - Only the two guard containers (`sdk-netguard` and `sdk-egress-guard`) receive `cap_add: [NET_ADMIN]`.
+   - `ROLE=egress` strictly restricts packet transmission: allows input from `sdk_proxy` (`172.31.240.32/28`) to port 8080, loopback (with 127.0.0.11 blocked), and permits output ONLY to configured numeric upstream IPs and TCP port (`UPSTREAM_IPS` / `UPSTREAM_PORTS`). Denies all DNS, IPv6, UDP/QUIC, and direct routes.
+   - No application container shares the proxy uplink network (`sdk_upstream`).
+   - Both guards install policy and verify table state before signaling healthy.
 
-4. `claude-sdk-host/docker-compose.debug.yml`:
-   - Explicit loopback debug overlay (`127.0.0.1:8080:8080` bound only to host loopback on `sdk-netguard`).
+3. **Official Pinned Playwright Seccomp Profile (Finding 3)**:
+   - Replaced handwritten broad seccomp syscall allowlist with the official pinned Playwright profile `deploy/seccomp/seccomp_profile.json` from `microsoft/playwright` tag `v1.64.1` (`utils/docker/seccomp_profile.json`).
+   - Retained source URL and Apache-2.0 Microsoft attribution in `deploy/seccomp/README.md` and `README.md`.
+   - Avoids broad allowlists, `seccomp:unconfined`, `SYS_ADMIN`, host IPC, or `--no-sandbox`.
 
-5. `claude-sdk-host/.env.example`:
-   - Pinned image tags, non-overlapping subnet definitions, static IP allocations, resource limits. Zero credentials, passwords, or keys.
+4. **Atomic Netguard Ruleset & DNS Blocking (Finding 4)**:
+   - Replaced disruptive `flush ruleset` in `deploy/netguard/entrypoint.sh` with atomic creation/replacement of only the managed table (`table inet netguard`), preserving Docker-owned NAT rules.
+   - Explicitly drops Docker embedded resolver `127.0.0.11` before loopback allowance in both input and output chains.
+   - Strict validation of all input variables without `eval`.
+   - Fails closed on missing or invalid upstream configuration; strictly prohibits broad RFC1918 wildcards.
+   - Never prints URLs containing credentials or sensitive parameters.
 
-6. `claude-sdk-host/config.example.json`:
-   - Full configuration schema matching coordinator spec: `applications` (id, owner, token_file, scopes, models, mcp_endpoints), `models` (aliases to Claude IDs), `proxy_url`, `proxy_bypass`, `credential_providers` (url, token_file, ca_file), and standard directory paths (`auth_dir`, `journal_path`, `work_dir`). Uses placeholders only.
+5. **Config Schema Alignment with Coordinator Settings (Finding 5)**:
+   - Corrected `claude-sdk-host/config.example.json` to strictly match coordinator's `Settings` model (`src/claude_host/config.py`).
+   - Removed `$schema` and `comment` fields (which violated `extra="forbid"`).
+   - Added `"idempotency_key_file": "/run/secrets/idempotency.key"`.
+   - Added `credential_providers: ["tms-credentials"]` list to application definition.
+   - Replaced obsolete model identifiers with `claude-sonnet-5-5` and `claude-haiku`.
+   - Corrected `proxy_bypass` to exact hostnames/IPs only (`["localhost", "127.0.0.1", "172.31.240.20", "172.31.240.21"]`), removing invalid CIDRs.
+   - Updated TMS MCP endpoint to actual path `/mcp/tms-execution` (`http://172.31.240.20:8000/mcp/tms-execution`).
+   - Updated credential provider URL to end with `/api/v1/internal/claude-host/credentials` (`https://172.31.240.21:8443/api/v1/internal/claude-host/credentials`).
+   - Zero real credentials in templates.
 
-7. `claude-sdk-host/deploy/seccomp/chromium.json`:
-   - Docker seccomp profile tailored for unprivileged non-root Chromium sandbox execution (allowing user namespace `clone`, `clone3`, `pidfd_open`, `chroot`, `setns`, etc.).
+6. **Compose Secrets Directory, Read-Only FS & Static Hosts (Finding 6)**:
+   - Configured operator secret directory mounted read-only as `/run/secrets:ro` via `${HOST_SECRETS_DIR:-./deploy/secrets_example}`, ensuring all app tokens, provider tokens, CAs, and idempotency keys are accessible.
+   - Provided standalone example secrets in `deploy/secrets_example/` readable by UID 1000 (`pwuser`).
+   - Configured `read_only: true` on containers with writable tmpfs mounts on `/tmp` and `/tmp/claude-host`.
+   - Updated `provision-auth.sh` to deliberately provision both `claude_sdk_auth` and `claude_sdk_journal` with UID:GID 1000:1000 and mode 0700.
+   - Zero external ports published by default (loopback binding isolated to `docker-compose.debug.yml`).
+   - Added consistent service aliases (`claude-sdk-host` and `sdk-egress`) on namespace owner networks.
+   - Generated static internal host mappings (`deploy/hosts`) via `generate-peers.sh` and wired them as read-only mounts into namespace owners (`/etc/hosts:ro`).
 
-8. `claude-sdk-host/deploy/netguard/`:
-   - `Dockerfile`: Minimal Alpine 3.20 image with `nftables`, `iproute2`, `bash`.
-   - `entrypoint.sh`: Validates all environment variables without `eval`, generates atomic `table inet netguard` ruleset (default drop on input, forward, output; allows established/related; allows loopback while explicitly dropping Docker embedded resolver `127.0.0.11`; allows incoming API from `sdk_clients`; allows outbound TCP to `sdk-egress` and approved internal tool IPs/ports; drops all direct external IPv4/IPv6 and UDP/DNS), loads rules atomically via `nft -f`, and maintains continuous health-monitoring.
+7. **Bundled CLI Login Maintenance (Finding 7)**:
+   - Refactored `deploy/scripts/login-maintenance.sh` to run in the guarded SDK namespace using the persistent auth volume.
+   - Dynamically discovers the bundled CLI binary inside the `claude-agent-sdk` package via Python (`Path(claude_agent_sdk.__file__).parent / '_bundled' / 'claude'`) rather than assuming a global `claude` binary on PATH.
+   - Invokes `$CLI_PATH auth login`.
+   - Never prints inherited `HTTP_PROXY` or reads/prints authentication tokens.
 
-9. `claude-sdk-host/deploy/egress/`:
-   - `Dockerfile`: Multi-stage build pairing official GOST v2.11.5 with Alpine 3.20.
-   - `entrypoint.sh`: Validates `/run/secrets/gost-config.json`, ensures `Debug: false` to prevent HTTP header/body logging, validates upstream node URL and protocol, ensures mandatory upstream chaining with no direct fallback, and executes `gost -C`.
-   - `gost.example.json`: Template for operator upstream configuration.
+8. **Graceful Drain & Recreate (Finding 8)**:
+   - Replaced abrupt stop in `deploy/scripts/drain-recreate.sh` with coordinator's process contract.
+   - Sends `SIGUSR1` to `claude-sdk-host` via `docker compose kill -s SIGUSR1` to initiate draining mode.
+   - Polls local in-container endpoint `http://127.0.0.1:8080/health/live` using an in-container urllib probe to verify `active == 0` and `queued == 0` within a bounded timeout (`DRAIN_TIMEOUT_SECONDS`, default 60s).
+   - Proceeds with `docker compose down` and `docker compose up -d` sequentially; documentation clarifies that container recreation is non-atomic.
 
-10. `claude-sdk-host/deploy/scripts/`:
-    - `preflight-check.sh`: Verifies CLI tools and checks host routing table and Docker IPAM for conflicts with the four `/28` subnets.
-    - `provision-auth.sh`: Safely initializes the named volume `claude_sdk_auth` with ownership `1000:1000` (mode 0700) using a network-disabled (`--network none`) disposable container, without opening unauthenticated API endpoints.
-    - `login-maintenance.sh`: Interactive one-off maintenance container to perform official Claude Code CLI sign-in through the egress proxy and save refreshable credentials into `claude_sdk_auth`.
-    - `generate-peers.sh`: Reads configuration and generates static internal `/etc/hosts` and nftables peer allowlists without RFC1918 wildcards.
-    - `drain-recreate.sh`: Atomically drains, tears down, and recreates the entire three-service namespace stack.
-    - `smoke-test.sh`: Isolated synthetic local smoke runner validating all scripts, JSON templates, and Compose configuration without reading production secrets or contacting external networks.
-    - `verify-egress.sh`: Acceptance probe script verifying NET-01 (proxy egress), NET-02 (direct egress fail-closed), and NET-03 (DNS / 127.0.0.11 blocking).
+9. **Strict GOST Forwarder Validation & Log Redaction (Finding 9)**:
+   - Refactored `deploy/egress/entrypoint.sh` to require `jq` unconditionally; removed debug fallback grep parser.
+   - Fails closed on absent, empty, or invalid config files.
+   - Rejects configurations with `Debug: true`, `Bypass`, `Routes`, or query options (`?`).
+   - Requires exactly one HTTP frontend listener in `ServeNodes` and exactly one supported upstream parent (`socks5://`, `http://`, `https://`) in `ChainNodes`.
+   - Never outputs ChainNode strings in errors or logs.
+   - Executes GOST with an unbuffered stream filter (`sed -u -E`) that suppresses authorization headers and scrubs credential URLs (`://user:pass@`).
 
-11. `claude-sdk-host/README.md`:
-    - Comprehensive operator manual documenting architecture, preflight checks, secrets setup, auth provisioning, login maintenance, operations, drain/recreate, curl examples, and egress verification recipes.
+10. **Evidence & Verification Integrity (Finding 10)**:
+    - Performed only non-destructive, authorized checks (`docker compose config`, shell syntax validation `bash -n`, python schema validation, static file generation).
+    - No Docker containers were built or started, respecting the no-Docker brief ownership rule.
+    - All verified command invocations and outputs below reflect actual executions.
 
 ---
 
-## 2. Manual Verification Evidence
+## 2. Actual Verification Evidence
 
-All verification was performed locally without starting Docker daemon or running prohibited automated test suites.
+### Check 1: Coordinator Settings Validation with Pydantic
+Executed against coordinator's `src/claude_host/config.py`:
+```bash
+$ uv run --with pydantic python -c "
+import sys, json
+sys.path.insert(0, '/Users/ivanakimkin/.codex/worktrees/claude-sdk-host/My_server/claude-sdk-host/src')
+from claude_host.config import Settings
 
-### Check 1: Compose Syntax and Schema Validation (`docker compose config`)
+with open('claude-sdk-host/config.example.json', 'r') as f:
+    data = json.load(f)
+
+settings = Settings.model_validate(data)
+print('Config validation SUCCEEDED!')
+print('Applications:', [a.id for a in settings.applications])
+print('Models:', list(settings.models.keys()))
+print('Credential Providers:', list(settings.credential_providers.keys()))
+print('Idempotency key file:', settings.idempotency_key_file)
+"
+```
+**Output:**
+```
+Config validation SUCCEEDED!
+Applications: ['tms-app']
+Models: ['claude-sonnet-5-5', 'claude-haiku']
+Credential Providers: ['tms-credentials']
+Idempotency key file: /run/secrets/idempotency.key
+```
+*Result: Exit 0. Pydantic Settings model validation succeeded with zero errors.*
+
+### Check 2: Secret Files Reading Verification
+Tested `Settings.verify_secret_files()` with mock secrets in `deploy/secrets_example/`:
+```bash
+$ uv run --with pydantic python -c "
+import sys, json
+sys.path.insert(0, '/Users/ivanakimkin/.codex/worktrees/claude-sdk-host/My_server/claude-sdk-host/src')
+from claude_host.config import Settings
+
+with open('claude-sdk-host/deploy/secrets_example/host-config.json', 'r') as f:
+    data = json.load(f)
+
+data['idempotency_key_file'] = 'claude-sdk-host/deploy/secrets_example/idempotency.key'
+data['applications'][0]['token_file'] = 'claude-sdk-host/deploy/secrets_example/apps/tms-app.token'
+data['credential_providers']['tms-credentials']['token_file'] = 'claude-sdk-host/deploy/secrets_example/providers/tms-credentials.token'
+data['credential_providers']['tms-credentials']['ca_file'] = 'claude-sdk-host/deploy/secrets_example/providers/tms-credentials-ca.crt'
+
+settings = Settings.model_validate(data)
+settings.verify_secret_files()
+print('Secret files verified successfully!')
+"
+```
+**Output:**
+```
+Secret files verified successfully!
+```
+*Result: Exit 0.*
+
+### Check 3: Compose Configuration Validation (`docker compose config`)
 ```bash
 $ cd claude-sdk-host && docker compose config
+```
+**Output:**
+```yaml
 name: claude-sdk-host
 services:
   claude-sdk-host:
@@ -106,12 +178,12 @@ services:
       CONFIG_PATH: /run/secrets/host-config.json
       HTTP_PROXY: http://172.31.240.35:8080
       HTTPS_PROXY: http://172.31.240.35:8080
-      NO_PROXY: localhost,127.0.0.1,172.31.240.0/28,172.31.240.16/28
+      NO_PROXY: localhost,127.0.0.1,172.31.240.20,172.31.240.21
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
       http_proxy: http://172.31.240.35:8080
       https_proxy: http://172.31.240.35:8080
-      no_proxy: localhost,127.0.0.1,172.31.240.0/28,172.31.240.16/28
+      no_proxy: localhost,127.0.0.1,172.31.240.20,172.31.240.21
     healthcheck:
       test:
         - CMD
@@ -129,19 +201,22 @@ services:
     init: true
     ipc: private
     network_mode: service:sdk-netguard
+    read_only: true
     restart: unless-stopped
-    secrets:
-      - source: host-config
-        target: /run/secrets/host-config.json
-        mode: "0400"
     security_opt:
       - no-new-privileges:true
-      - seccomp:deploy/seccomp/chromium.json
+      - seccomp:deploy/seccomp/seccomp_profile.json
     shm_size: "536870912"
     tmpfs:
+      - /tmp:size=512M,mode=1777
       - /tmp/claude-host:size=256M,mode=1777
     user: 1000:1000
     volumes:
+      - type: bind
+        source: /Users/ivanakimkin/.codex/worktrees/sdk-deploy/My_server/claude-sdk-host/deploy/secrets_example
+        target: /run/secrets
+        read_only: true
+        bind: {}
       - type: volume
         source: claude-auth
         target: /var/lib/claude-auth
@@ -157,6 +232,10 @@ services:
     cap_drop:
       - ALL
     container_name: claude-sdk-egress
+    depends_on:
+      sdk-egress-guard:
+        condition: service_healthy
+        required: true
     environment:
       CONFIG_FILE: /run/secrets/gost-config.json
     healthcheck:
@@ -168,18 +247,68 @@ services:
       retries: 3
       start_period: 2s
     image: claude-sdk-egress:local
-    networks:
-      sdk_proxy:
-        ipv4_address: 172.31.240.35
-      sdk_upstream:
-        ipv4_address: 172.31.240.50
+    network_mode: service:sdk-egress-guard
+    read_only: true
     restart: unless-stopped
-    secrets:
-      - source: gost-config
-        target: /run/secrets/gost-config.json
-        mode: "0400"
     security_opt:
       - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=16M,mode=1777
+    volumes:
+      - type: bind
+        source: /Users/ivanakimkin/.codex/worktrees/sdk-deploy/My_server/claude-sdk-host/deploy/secrets_example
+        target: /run/secrets
+        read_only: true
+        bind: {}
+  sdk-egress-guard:
+    build:
+      context: /Users/ivanakimkin/.codex/worktrees/sdk-deploy/My_server/claude-sdk-host
+      dockerfile: deploy/netguard/Dockerfile
+    cap_add:
+      - NET_ADMIN
+    cap_drop:
+      - ALL
+    container_name: claude-sdk-egress-guard
+    environment:
+      LISTEN_PORT: "8080"
+      PROXY_SUBNET: 172.31.240.32/28
+      ROLE: egress
+      UPSTREAM_IPS: 172.31.240.50
+      UPSTREAM_PORTS: "1080"
+    healthcheck:
+      test:
+        - CMD
+        - nft
+        - list
+        - table
+        - inet
+        - netguard
+      timeout: 3s
+      interval: 5s
+      retries: 3
+      start_period: 2s
+    image: claude-sdk-netguard:local
+    networks:
+      sdk_proxy:
+        aliases:
+          - sdk-egress
+        ipv4_address: 172.31.240.35
+      sdk_upstream:
+        aliases:
+          - sdk-egress
+        ipv4_address: 172.31.240.50
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=16M,mode=1777
+    volumes:
+      - type: bind
+        source: /Users/ivanakimkin/.codex/worktrees/sdk-deploy/My_server/claude-sdk-host/deploy/hosts
+        target: /etc/hosts
+        read_only: true
+        bind: {}
   sdk-netguard:
     build:
       context: /Users/ivanakimkin/.codex/worktrees/sdk-deploy/My_server/claude-sdk-host
@@ -196,6 +325,7 @@ services:
       CLIENTS_SUBNET: 172.31.240.0/28
       PROXY_IP: 172.31.240.35
       PROXY_PORT: "8080"
+      ROLE: host
       TOOLS_SUBNET: 172.31.240.16/28
     healthcheck:
       test:
@@ -212,14 +342,29 @@ services:
     image: claude-sdk-netguard:local
     networks:
       sdk_clients:
+        aliases:
+          - claude-sdk-host
         ipv4_address: 172.31.240.2
       sdk_proxy:
+        aliases:
+          - claude-sdk-host
         ipv4_address: 172.31.240.34
       sdk_tools:
+        aliases:
+          - claude-sdk-host
         ipv4_address: 172.31.240.18
+    read_only: true
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=16M,mode=1777
+    volumes:
+      - type: bind
+        source: /Users/ivanakimkin/.codex/worktrees/sdk-deploy/My_server/claude-sdk-host/deploy/hosts
+        target: /etc/hosts
+        read_only: true
+        bind: {}
 networks:
   sdk_clients:
     name: claude_sdk_clients
@@ -261,29 +406,24 @@ volumes:
     name: claude_sdk_auth
   claude-journal:
     name: claude_sdk_journal
-secrets:
-  gost-config:
-    name: claude-sdk-host_gost-config
-    file: /Users/ivanakimkin/.codex/worktrees/sdk-deploy/My_server/claude-sdk-host/deploy/egress/gost.example.json
-  host-config:
-    name: claude-sdk-host_host-config
-    file: /Users/ivanakimkin/.codex/worktrees/sdk-deploy/My_server/claude-sdk-host/config.example.json
 ```
-*Result: Exit 0. Validated with zero warnings or errors.*
+*Result: Exit 0. Four services properly structured, zero published ports, non-overlapping /28 subnets.*
 
-### Check 2: Debug Overlay Validation
+### Check 4: Debug Overlay Validation
 ```bash
 $ cd claude-sdk-host && docker compose -f docker-compose.yml -f docker-compose.debug.yml config
-# Successfully merged loopback port binding (127.0.0.1:8080:8080) onto sdk-netguard without modifying other services.
 ```
-*Result: Exit 0.*
+*Result: Exit 0. Loopback port `127.0.0.1:8080:8080` attached only to `sdk-netguard`; no other services modified.*
 
-### Check 3: Synthetic Local Smoke Verification (`smoke-test.sh`)
+### Check 5: Isolated Local Smoke Runner (`deploy/scripts/smoke-test.sh`)
 ```bash
-$ bash claude-sdk-host/deploy/scripts/smoke-test.sh
+$ cd claude-sdk-host && ./deploy/scripts/smoke-test.sh
+```
+**Output:**
+```
 === Isolated Local Smoke Recipe ===
 Working directory: /Users/ivanakimkin/.codex/worktrees/sdk-deploy/My_server/claude-sdk-host
-[1/4] Validating shell syntax of all scripts...
+[1/5] Validating shell syntax of all scripts...
   [OK] deploy/netguard/entrypoint.sh
   [OK] deploy/egress/entrypoint.sh
   [OK] deploy/scripts/preflight-check.sh
@@ -293,13 +433,16 @@ Working directory: /Users/ivanakimkin/.codex/worktrees/sdk-deploy/My_server/clau
   [OK] deploy/scripts/drain-recreate.sh
   [OK] deploy/scripts/smoke-test.sh
   [OK] deploy/scripts/verify-egress.sh
-[2/4] Validating JSON schema & syntax of example configurations...
+[2/5] Validating JSON schema & syntax of configurations...
   [OK] config.example.json is valid JSON
   [OK] deploy/egress/gost.example.json is valid JSON
-  [OK] deploy/seccomp/chromium.json is valid JSON
-[3/4] Testing Compose interpolation with disposable mock secret files...
-  [OK] docker compose config passed with isolated mock secrets.
-[4/4] Verifying Dockerfile layout...
+  [OK] deploy/seccomp/seccomp_profile.json is valid JSON
+[3/5] Testing static peers generation...
+Wrote static internal peer mappings to /Users/ivanakimkin/.codex/worktrees/sdk-deploy/My_server/claude-sdk-host/deploy/hosts
+  [OK] deploy/hosts successfully generated
+[4/5] Testing Compose interpolation with disposable mock secret files...
+  [OK] docker compose config passed with isolated mock secrets directory.
+[5/5] Verifying Dockerfile layout...
   [OK] claude-sdk-host/Dockerfile found.
   [OK] deploy/netguard/Dockerfile found.
   [OK] deploy/egress/Dockerfile found.
@@ -307,15 +450,18 @@ Working directory: /Users/ivanakimkin/.codex/worktrees/sdk-deploy/My_server/clau
 === Isolated Smoke Recipe PASSED ===
 All packaging templates, Compose interpolation, and shell entrypoints validated.
 ```
-*Result: Exit 0.*
+*Result: Exit 0. All 9 shell scripts pass `bash -n`, JSON files pass `jq empty`, hosts file generation works, mock secrets interpolation passes.*
 
 ---
 
 ## 3. Operational Notes for Coordinator
 
-1. **Package Source & Build**:
-   `claude-sdk-host/Dockerfile` runs `pip install --no-cache-dir .`. When the coordinator adds `pyproject.toml` and completes application modules in `src/claude_host/`, Docker builds will proceed without modifying the Dockerfile.
-2. **Production Preflight**:
-   Before launching the disposable stack for Task 7 acceptance, the coordinator must execute `./deploy/scripts/preflight-check.sh` on the Docker host to verify that `172.31.240.0/28`, `172.31.240.16/28`, `172.31.240.32/28`, and `172.31.240.48/28` do not overlap with existing host routes or Docker networks.
-3. **Egress Acceptance**:
-   `./deploy/scripts/verify-egress.sh` is provided for the coordinator to verify NET-01, NET-02, and NET-03 on the running disposable stack.
+1. **Docker Builds & Execution**:
+   Per the brief ownership rules, no Docker daemon or container runs were executed by this lane. The images are ready for coordinator build:
+   - `claude-sdk-host` uses `mcr.microsoft.com/playwright/python:v1.64.1-noble` and builds with `pip install --no-cache-dir .`.
+   - `claude-sdk-netguard` builds from `deploy/netguard/Dockerfile` (Alpine 3.20 + nftables).
+   - `claude-sdk-egress` builds from `deploy/egress/Dockerfile` (Alpine 3.20 + GOST v2.11.5).
+2. **Volume Initialization**:
+   Before launching the stack, run `./deploy/scripts/provision-auth.sh` to initialize both `claude_sdk_auth` and `claude_sdk_journal` with mode 0700 and UID 1000.
+3. **Live Egress Verification**:
+   When the disposable stack is brought up on a Docker host with actual upstream network exit, execute `./deploy/scripts/verify-egress.sh` to run the acceptance probes (NET-01 proxy exit, NET-02 direct fail-closed, and NET-03 DNS blocking).
