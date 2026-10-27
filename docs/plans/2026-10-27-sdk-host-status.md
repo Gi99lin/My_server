@@ -47,3 +47,13 @@ Bind upstream proxy without printing credentials; register application tokens an
 - Antigravity reported `--mode auto is not available for this account; continuing in the default mode.` Default mode denied runtime/deploy shell commands and browser source reading. Their result status was SUCCESS despite `denied_actions` and no code; those runs are not accepted as implementation.
 - The owner subsequently explicitly approved `--dangerously-skip-permissions` for these worktree lines only. Fresh conversations use the flag; the initial denied runs remain unaccepted. Logs remain outside Git.
 - Coordinator manual configuration/auth/journal probe passed: invalid scope denied, cross-application lookup returned 404, request key repeated without duplicate creation, agent budget excluded cache reads, content canary absent from journal projections, restart marked active session interrupted. No automated suite added.
+
+## Coordinator integration in progress
+
+All three first lane reports required a consolidated fresh-agent correction. Runtime review found stream UUID/provider ID confusion, false success on truncated streams, and unbounded cleanup. Browser review found incomplete origin/lease validation and missing real browser startup. Deploy review found a mismatched browser image and missing proxy-namespace firewall. Corrections are committed on the producer branches; coordinator integration probes remain required.
+
+TMS integration lives in a separate worktree at `ai-testcase-generator/.worktrees/sdk-host-integration`, branch `codex/claude-host-integration`, base `f1de99aa463e`. Credential grants and accounting receipts use the existing leased platform job payload under row locks, with no new schema or migration. Usage receipts and domain counters commit in one transaction. Changing this choice later would require a schema migration and receipt backfill; current volume is bounded per job.
+
+Existing targeted TMS tests on the coordinator's disposable Postgres port 5639 passed: **54 passed, 1 skipped**. The first attempt failed because enum migrations had not been applied; applying the repository's documented Alembic bootstrap resolved it. This is not evidence for new host adapters yet.
+
+Coordinator added the API request contracts and supervisor against the already verified config/journal producer and frozen runtime interface; actual runtime worker integration is gated on corrected producers below. New source has only been compiled/linted so far, not accepted as working. No live Claude login, inference or production deployment occurred.

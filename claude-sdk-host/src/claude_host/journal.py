@@ -141,6 +141,13 @@ class Journal:
             raise RunFailure("session_not_found", 404)
         return self.public(row)
 
+    def find_request(self, app_id: str, request_id: str) -> dict | None:
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT id,digest FROM sessions WHERE app_id=? AND request_id=?", (app_id, request_id)
+            ).fetchone()
+        return dict(row) if row else None
+
     def set_running(self, session_id: str) -> None:
         with self.connection() as db:
             db.execute(
