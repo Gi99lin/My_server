@@ -17,6 +17,8 @@ from collections import deque
 from typing import Any
 from urllib.parse import quote, quote_plus, urljoin, urlsplit, urlunsplit
 
+from .tunnel_proxy import StandTunnelProxy, is_loopback_or_local
+
 NAVIGATION_REFUSAL = "Переход запрещён"
 CONSOLE_LINES = 300
 SECRET_FIELDS_KEPT = 8
@@ -107,13 +109,18 @@ class BrowserSession:
         http_credentials: tuple[str, str] | None = None,
         proxy_url: str | None = None,
         proxy_bypass: list[str] | None = None,
+        tunnel_host: str | None = None,
+        tunnel_port: int | None = None,
     ) -> None:
         self._stand_address = stand_address
         self._http_credentials = http_credentials
         self._action_timeout_ms = action_timeout_ms
         self._proxy_url = proxy_url
         self._proxy_bypass = proxy_bypass or []
+        self._tunnel_host = tunnel_host
+        self._tunnel_port = tunnel_port
 
+        self._tunnel_proxy: StandTunnelProxy | None = None
         self._playwright: Any = None
         self._browser: Any = None
         self._context: Any = None
@@ -146,7 +153,26 @@ class BrowserSession:
                 "headless": True,
                 "chromium_sandbox": True,
             }
-            if self._proxy_url:
+            if self._tunnel_host and self._tunnel_port:
+                self._tunnel_proxy = StandTunnelProxy(
+                    stand_url=self._stand_address,
+                    tunnel_host=self._tunnel_host,
+                    tunnel_port=self._tunnel_port,
+                    proxy_url=self._proxy_url,
+                    proxy_bypass=self._proxy_bypass,
+                )
+                await self._tunnel_proxy.start()
+
+                bypass_entries = ["<-loopback>"]
+                for p in self._proxy_bypass:
+                    clean = p.strip()
+                    if clean and not is_loopback_or_local(clean):
+                        bypass_entries.append(clean)
+                launch_kwargs["proxy"] = {
+                    "server": self._tunnel_proxy.url,
+                    "bypass": ",".join(bypass_entries),
+                }
+            elif self._proxy_url:
                 proxy_config: dict[str, str] = {"server": self._proxy_url}
                 if self._proxy_bypass:
                     proxy_config["bypass"] = ",".join(self._proxy_bypass)
@@ -196,12 +222,15 @@ class BrowserSession:
 
     async def reset(self) -> None:
         """Drop the browser. The next `start` opens a new one with an empty profile."""
+        tunnel_proxy = self._tunnel_proxy
+        self._tunnel_proxy = None
         context, browser, playwright = self._context, self._browser, self._playwright
         self._context = self._browser = self._playwright = self._page = None
         self._started = False
         self.secret_fields.clear()
         self.console.clear()
         for closer in (
+            tunnel_proxy.stop() if tunnel_proxy is not None else None,
             context.close() if context is not None else None,
             browser.close() if browser is not None else None,
             playwright.stop() if playwright is not None else None,
