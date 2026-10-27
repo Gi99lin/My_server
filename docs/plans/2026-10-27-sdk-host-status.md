@@ -8,7 +8,7 @@ The owner approved the unified executor architecture and requested Antigravity C
 
 ## Decisions
 
-- Use `gemini-3.8-flash-medium`, confirmed by `agy models`; run in `auto` mode without blanket permission bypass.
+- Use `gemini-3.8-flash-medium`, confirmed by `agy models`; use `--dangerously-skip-permissions` for these isolated lines, explicitly approved by the owner on 2026-10-27 after `auto` proved unavailable.
 - Use native managed worktrees for this repository; original untracked user files remain untouched. Implementation is not a production deployment.
 - No new automated suite for this non-UI API/infra project, following the owner's global rule. Manual API/container probes and existing TMS checks are required.
 - Local Docker exposes 6,210,170,880 bytes RAM; only one coordinator-owned disposable stack may run.
@@ -16,15 +16,15 @@ The owner approved the unified executor architecture and requested Antigravity C
 
 ## Cycle 1
 
-State: initial Antigravity attempts stopped by normal permission checks before code; explicit owner approval for blanket bypass is pending. Coordinator has implemented independent configuration/authentication/journal producers and manually verified them. Coordinator reproduced `agy --version` = 1.4.8 and Gemini 3.8 availability; no application code existed at baseline.
+State: initial Antigravity attempts stopped by normal permission checks before code; owner approved the bypass flag for these isolated lines; restarting in fresh CLI conversations. Coordinator has implemented independent configuration/authentication/journal producers and manually verified them. Coordinator reproduced `agy --version` = 1.4.8 and Gemini 3.8 availability; no application code existed at baseline.
 
 Codex usage at start: 61% of 5-hour window, 57% of weekly window; Antigravity exposes models but no equivalent quota has been established. Do not invent quota figures.
 
 | Lane | Runtime/model | Ownership | State |
 | --- | --- | --- | --- |
-| runtime | Antigravity / Gemini 3.8 Flash Medium | SDK lifecycle, usage | initial run stopped: permission not granted |
-| browser | Antigravity / Gemini 3.8 Flash Medium | Toolkit, credential grant, evidence, submission | initial run stopped: permission not granted |
-| deploy | Antigravity / Gemini 3.8 Flash Medium | Docker, namespace guard, proxy, runbook | initial run stopped: permission not granted |
+| runtime | Antigravity / Gemini 3.8 Flash Medium | SDK lifecycle, usage | relaunching with owner-approved flag |
+| browser | Antigravity / Gemini 3.8 Flash Medium | Toolkit, credential grant, evidence, submission | relaunching with owner-approved flag |
+| deploy | Antigravity / Gemini 3.8 Flash Medium | Docker, namespace guard, proxy, runbook | relaunching with owner-approved flag |
 
 ## Acceptance ledger
 
@@ -45,5 +45,5 @@ Bind upstream proxy without printing credentials; register application tokens an
 
 - Managed detached nohup processes did not survive the execution harness; foreground managed sessions preserved CLI lifetime. No application code was produced by those attempts.
 - Antigravity reported `--mode auto is not available for this account; continuing in the default mode.` Default mode denied runtime/deploy shell commands and browser source reading. Their result status was SUCCESS despite `denied_actions` and no code; those runs are not accepted as implementation.
-- Permission question for `--dangerously-skip-permissions` is pending; no bypass flag has been used. Logs remain outside Git.
+- The owner subsequently explicitly approved `--dangerously-skip-permissions` for these worktree lines only. Fresh conversations use the flag; the initial denied runs remain unaccepted. Logs remain outside Git.
 - Coordinator manual configuration/auth/journal probe passed: invalid scope denied, cross-application lookup returned 404, request key repeated without duplicate creation, agent budget excluded cache reads, content canary absent from journal projections, restart marked active session interrupted. No automated suite added.

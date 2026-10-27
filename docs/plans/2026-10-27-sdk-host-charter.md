@@ -1,6 +1,6 @@
 # Claude SDK host lane charter
 
-Owner approved implementation and Antigravity/Gemini 3.8 developers on 2026-10-27. Runtime is `agy 1.4.8`, model `gemini-3.8-flash-medium`, permission mode `auto`; blanket permission bypass was not requested and is not used.
+Owner approved implementation and Antigravity/Gemini 3.8 developers on 2026-10-27. Runtime is `agy 1.4.8`, model `gemini-3.8-flash-medium`, owner-approved `--dangerously-skip-permissions` for these isolated lines only; no server/deploy/secret access.
 
 Each lane has its own Git worktree and `codex/` branch, disjoint write paths and a 60-minute wall-clock limit. No lane edits the canonical checkout or another lane. No push, merge, rebase, destructive cleanup, server mutation, credential reads, paid model calls or subagents. The coordinator merges and verifies reports against code. Agents commit their own files and report exact checks; they do not modify shared contracts or broaden a failed check to match their implementation.
 
