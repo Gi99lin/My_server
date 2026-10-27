@@ -32,7 +32,7 @@ class Browser(StrictRequest):
 
 
 class SourceContract(StrictRequest):
-    file_path: str = Field(min_length=1, max_length=512)
+    file_path: str = Field(min_length=1, max_length=1024)
     global_case_id: str = Field(min_length=1, max_length=256)
     credential_key: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_]{0,31}$")
 
@@ -43,7 +43,7 @@ class AgentRequest(StrictRequest):
     model: str = Field(min_length=1, max_length=128)
     system_prompt: str = Field(max_length=32000)
     prompt: str = Field(min_length=1, max_length=160000)
-    timeout_seconds: int = Field(ge=1, le=7200)
+    timeout_seconds: int = Field(ge=1)
     token_budget: int = Field(ge=1, le=10_000_000)
     max_turns: int = Field(default=1500, ge=1, le=1500)
     mcp_servers: list[McpServer] = Field(default_factory=list, max_length=8)

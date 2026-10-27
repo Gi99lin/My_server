@@ -12,9 +12,10 @@ set -euo pipefail
 # ==============================================================================
 
 ROLE="${GUARD_ROLE:-${ROLE:-host}}"
+if [ "$ROLE" = "host" ]; then rm -f /run/netguard/ready; fi
 echo "[netguard] Starting network namespace guard initialization (role=$ROLE)..."
 
-# Helper: strict IPv4 CIDR validation (e.g. 172.31.240.0/28)
+# Helper: strict IPv4 CIDR validation (e.g. 10.253.240.0/28)
 validate_ipv4_cidr() {
     local val="$1"
     local name="$2"
@@ -24,7 +25,7 @@ validate_ipv4_cidr() {
     fi
 }
 
-# Helper: strict IPv4 address validation (e.g. 172.31.240.35)
+# Helper: strict IPv4 address validation (e.g. 10.253.240.35)
 validate_ipv4_addr() {
     local val="$1"
     local name="$2"
@@ -50,8 +51,8 @@ if [ "$ROLE" = "host" ]; then
     # --------------------------------------------------------------------------
     # ROLE: host (Guards claude-sdk-host)
     # --------------------------------------------------------------------------
-    CLIENTS_SUBNET="${CLIENTS_SUBNET:-172.31.240.0/28}"
-    PROXY_IP="${PROXY_IP:-172.31.240.35}"
+    CLIENTS_SUBNET="${CLIENTS_SUBNET:-10.253.240.0/28}"
+    PROXY_IP="${PROXY_IP:-10.253.240.35}"
     PROXY_PORT="${PROXY_PORT:-8080}"
     API_PORT="${API_PORT:-8080}"
 
@@ -198,7 +199,7 @@ elif [ "$ROLE" = "egress" ]; then
     # --------------------------------------------------------------------------
     # ROLE: egress (Guards sdk-egress forwarder)
     # --------------------------------------------------------------------------
-    PROXY_SUBNET="${PROXY_SUBNET:-172.31.240.32/28}"
+    PROXY_SUBNET="${PROXY_SUBNET:-10.253.240.32/28}"
     LISTEN_PORT="${LISTEN_PORT:-8080}"
     UPSTREAM_IPS="${UPSTREAM_IPS:-}"
     UPSTREAM_PORTS="${UPSTREAM_PORTS:-1080}"
@@ -339,13 +340,15 @@ if ! nft list table inet netguard >/dev/null 2>&1; then
     exit 1
 fi
 
+if [ "$ROLE" = "host" ]; then touch /run/netguard/ready; chmod 644 /run/netguard/ready; fi
 echo "[netguard] Ruleset successfully loaded and verified. Network namespace secured (role=$ROLE)."
 
 # Keep alive and monitor
-trap 'echo "[netguard] Shutting down..."; exit 0' SIGTERM SIGINT
+trap 'if [ "$ROLE" = "host" ]; then rm -f /run/netguard/ready; fi; exit 0' SIGTERM SIGINT
 
 while true; do
     if ! nft list table inet netguard >/dev/null 2>&1; then
+        if [ "$ROLE" = "host" ]; then rm -f /run/netguard/ready; fi
         echo "[netguard] ERROR: Ruleset dropped unexpectedly! Exiting." >&2
         exit 1
     fi

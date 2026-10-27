@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 import signal
 import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import ValidationError
 
 from .auth import request_application
@@ -25,7 +27,7 @@ from .sessions import Supervisor
 
 def error_response(code: str, status: int) -> JSONResponse:
     return JSONResponse(
-        {"error": {"code": code, "message": code, "type": "host_error"}},
+        {"error": {"code": code, "message": code, "type": "invalid_request_error" if status == 400 else "host_error"}},
         status_code=status,
         headers={"Cache-Control": "no-store"},
     )
@@ -138,7 +140,25 @@ def create_app(config_path: Path, *, settings: Settings | None = None, superviso
         # Network and auth are operator-proven prerequisites; this endpoint never makes a paid query.
         if not cfg.auth_dir.is_dir():
             raise RunFailure("auth_directory_unavailable", 503)
-        return {"status": "ready", "inference_verified": False}
+        if not (cfg.auth_dir / ".credentials.json").is_file():
+            raise RunFailure("reauthentication_required", 503)
+        if manager.journal.disk_bytes() >= cfg.max_journal_bytes or shutil.disk_usage(cfg.work_dir).free < 16_777_216:
+            raise RunFailure("storage_unavailable", 503)
+        target = urlsplit(cfg.proxy_url)
+        try:
+            _, writer = await asyncio.wait_for(
+                asyncio.open_connection(target.hostname, target.port or (443 if target.scheme == "https" else 80)), 1
+            )
+            writer.close()
+            await writer.wait_closed()
+        except (OSError, TimeoutError):
+            raise RunFailure("proxy_unavailable", 503) from None
+        return {"status": "ready", "auth_state_present": True, "proxy_tcp_ready": True, "inference_verified": False}
+
+    @app.get("/metrics")
+    async def metrics(request: Request):
+        application = request_application(request, "session:read")
+        return PlainTextResponse(manager.metrics(application.id), media_type="text/plain; version=0.0.4")
 
     @app.get("/v1/models")
     async def models(request: Request):
@@ -153,6 +173,11 @@ def create_app(config_path: Path, *, settings: Settings | None = None, superviso
         application = request_application(request)
         return {
             "scopes": application.scopes,
+            "limits": {
+                "max_agent_seconds": cfg.max_agent_seconds,
+                "max_agent_tokens": cfg.max_agent_tokens,
+                "queue_wait_seconds": cfg.queue_wait_seconds,
+            },
             "completion": {
                 "text_only": True,
                 "tools": False,
@@ -290,7 +315,10 @@ def create_app(config_path: Path, *, settings: Settings | None = None, superviso
                 if await request.is_disconnected():
                     raise RunFailure("client_disconnected", 499)
                 try:
-                    return await asyncio.wait_for(listener.get(), timeout=0.25)
+                    event = await asyncio.wait_for(listener.get(), timeout=0.25)
+                    if event["type"] == "disconnect":
+                        raise RunFailure("slow_consumer", 499)
+                    return event
                 except TimeoutError:
                     if live_session.done.is_set() and listener.empty():
                         raise RunFailure("worker_interrupted") from None
@@ -301,8 +329,12 @@ def create_app(config_path: Path, *, settings: Settings | None = None, superviso
             if result["state"] != "completed":
                 raise RunFailure(
                     result["stop_reason"] or "completion_failed",
-                    429 if result["stop_reason"] == "rate_limited" else 503,
+                    429
+                    if result["stop_reason"] == "rate_limited"
+                    else (504 if result["state"] == "timed_out" else 503),
                 )
+            if not result["accounting_complete"]:
+                raise RunFailure("accounting_incomplete", 503)
             return result
 
         if not parsed.stream:
@@ -336,15 +368,19 @@ def create_app(config_path: Path, *, settings: Settings | None = None, superviso
                 if not live_session.done.is_set():
                     await manager.cancel(sid, application.id, "client_disconnected")
 
-        # Delay HTTP headers until SDK startup or a concrete pre-start failure.
+        # CLI initialization does not prove provider startup. Hold headers until
+        # provider text/usage or a successful terminal response is available.
+        prefetched = []
         try:
             while True:
                 event = await next_event()
-                if event["type"] == "started":
+                if event["type"] in {"text_delta", "usage"}:
+                    prefetched.append(event)
                     break
                 if event["type"] == "terminal":
                     await settle()
-                    raise RunFailure("provider_stream_incomplete")
+                    prefetched.append(event)
+                    break
         except BaseException:
             manager.unlisten(sid, listener)
             if not live_session.done.is_set():
@@ -356,7 +392,7 @@ def create_app(config_path: Path, *, settings: Settings | None = None, superviso
                 if chat:
                     yield chunk(role=True)
                 while True:
-                    event = await next_event()
+                    event = prefetched.pop(0) if prefetched else await next_event()
                     if event["type"] == "text_delta":
                         yield chunk(event["data"]["text"])
                     elif event["type"] == "terminal":

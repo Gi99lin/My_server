@@ -1,45 +1,31 @@
-# Pinned Playwright Python image based on Ubuntu 24.04 (noble) with Python 3.12
-# Matching coordinator dependency pin: playwright==1.64.1
-FROM mcr.microsoft.com/playwright/python:v1.64.1-noble
+# Official Python multi-platform base, fixed by digest. Install only the browser
+# this service uses rather than a complete Chromium/Firefox/WebKit image.
+FROM python:3.12-slim@sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b94cd8ebbe06a9
 
-# Prevent interactive prompts and configure Python environment
-ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONUNBUFFERED=1 \
+ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     CLAUDE_CONFIG_DIR=/var/lib/claude-auth \
-    CONFIG_PATH=/run/secrets/host-config.json
-
-# Pre-create required directory layout with explicit non-root ownership (pwuser UID:GID 1000:1000)
-# - /var/lib/claude-auth: Official Claude authentication persistence volume
-# - /var/lib/claude-host: SQLite journal and durable accounting database
-# - /tmp/claude-host: Bounded per-session temporary workspace
-# - /app: Application code root
-RUN mkdir -p /var/lib/claude-auth /var/lib/claude-host /tmp/claude-host /app && \
-    chown -R pwuser:pwuser /var/lib/claude-auth /var/lib/claude-host /tmp/claude-host /app && \
-    chmod 700 /var/lib/claude-auth /var/lib/claude-host && \
-    chmod 1777 /tmp/claude-host
+    CLAUDE_HOST_CONFIG=/run/secrets/host-config.json
 
 WORKDIR /app
-
-# Copy application package source (src/claude_host and coordinator pyproject.toml)
-COPY --chown=pwuser:pwuser pyproject.toml /app/
-COPY --chown=pwuser:pwuser src /app/src
-
-# Build and install package at build time. No runtime network installations or updates permitted.
-# Official Claude Code CLI is bundled inside claude-agent-sdk wheel; do not install another global CLI.
-RUN pip install --no-cache-dir .
-
-# Switch to unprivileged non-root user
-USER pwuser
-
-# Expose internal API port (not published externally; accessible on internal network)
+COPY pyproject.toml /app/
+RUN python -c 'import tomllib,pathlib; d=tomllib.loads(pathlib.Path("pyproject.toml").read_text()); pathlib.Path("/tmp/requirements.txt").write_text("\n".join(d["project"]["dependencies"]))' \
+    && pip install --no-cache-dir -r /tmp/requirements.txt \
+    && python -m playwright install --with-deps chromium \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 1000 pwuser \
+    && useradd --uid 1000 --gid 1000 --create-home pwuser \
+    && mkdir -p /var/lib/claude-auth /var/lib/claude-host /tmp/claude-host \
+    && chown -R 1000:1000 /var/lib/claude-auth /var/lib/claude-host /tmp/claude-host \
+    && chmod 700 /var/lib/claude-auth /var/lib/claude-host \
+    && chmod -R a+rX /ms-playwright
+COPY src /app/src
+RUN pip install --no-cache-dir --no-deps .
+USER 1000:1000
 EXPOSE 8080
-
-# Volumes for durable state and official auth credentials
 VOLUME ["/var/lib/claude-auth", "/var/lib/claude-host"]
-
-# Entrypoint invokes module directly; default subcommand is 'serve'
 ENTRYPOINT ["python", "-m", "claude_host"]
 CMD ["serve"]

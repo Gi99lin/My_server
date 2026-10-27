@@ -18,7 +18,7 @@ from pathlib import Path
 
 from .config import Application, Settings, read_secret
 from .contracts import RunFailure
-from .journal import Journal
+from .journal import TERMINAL_STATES, Journal
 
 
 @dataclass(repr=False)
@@ -75,6 +75,10 @@ class Supervisor:
             if task:
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
+        running = [s.task for s in self.live.values() if s.task and not s.task.done()]
+        if running:
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(asyncio.gather(*running, return_exceptions=True), 5)
 
     def stats(self) -> dict:
         return {
@@ -84,9 +88,35 @@ class Supervisor:
             "draining": self.draining,
         }
 
+    def metrics(self, app_id: str) -> str:
+        # Labels come from fixed enums, never prompts, headers or identifiers.
+        rows = []
+        with self.journal.connection() as db:
+            for row in db.execute(
+                "SELECT state,COUNT(*) AS count,SUM(input_tokens) AS input,"
+                "SUM(cache_creation_input_tokens) AS write,SUM(cache_read_input_tokens) AS read,"
+                "SUM(output_tokens) AS output,"
+                "SUM(COALESCE((SELECT MIN(e.created_at) FROM events e "
+                "WHERE e.session_id=sessions.id AND e.kind='terminal'),updated_at)-created_at) AS duration "
+                "FROM sessions WHERE app_id=? GROUP BY state",
+                (app_id,),
+            ):
+                state = row["state"]
+                rows.append(f'claude_host_sessions{{state="{state}"}} {row["count"]}')
+                for kind in ("input", "write", "read", "output"):
+                    rows.append(f'claude_host_tokens{{state="{state}",category="{kind}"}} {row[kind] or 0}')
+                if state in TERMINAL_STATES:
+                    rows.append(f'claude_host_duration_seconds_sum{{state="{state}"}} {row["duration"] or 0}')
+        owned = [s for s in self.live.values() if s.app_id == app_id]
+        rows.append(f"claude_host_active_children {sum(s.id in self.active for s in owned)}")
+        rows.append(f"claude_host_queued {sum(not s.done.is_set() and s.id not in self.active for s in owned)}")
+        return "\n".join(rows) + "\n"
+
     async def submit(self, app: Application, payload: dict) -> tuple[dict, bool]:
         if self.draining:
             raise RunFailure("host_draining", 503)
+        if self.settings.network_ready_file and not self.settings.network_ready_file.is_file():
+            raise RunFailure("host_not_ready", 503)
         profile = payload["profile"]
         category = "completion" if profile == "completion" else "agent"
         capacity = self.settings.completion_queue_size if category == "completion" else self.settings.agent_queue_size
@@ -174,7 +204,7 @@ class Supervisor:
             if (
                 live.payload["profile"] != "tms-authoring"
                 or not isinstance(source, str)
-                or len(source.encode()) > 60000
+                or len(source) > 60000
                 or live.submission
             ):
                 raise RunFailure("invalid_worker_submission")
@@ -259,6 +289,8 @@ class Supervisor:
     async def _execute(self, live: LiveSession):
         pending_terminal = None
         try:
+            if live.done.is_set() or live.stop_reason:
+                return
             if time.monotonic() >= live.deadline:
                 raise RunFailure("deadline_exceeded")
             self.journal.set_running(live.id)
@@ -277,6 +309,8 @@ class Supervisor:
                 start_new_session=True,
                 limit=1_100_000,
             )
+            if live.done.is_set() or live.stop_reason:
+                raise RunFailure(live.stop_reason or "cancelled")
             wire = {
                 "session_id": live.id,
                 "remaining_seconds": max(0, live.deadline - time.monotonic()),

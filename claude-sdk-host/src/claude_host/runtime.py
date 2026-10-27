@@ -116,6 +116,8 @@ SAFE_STOP_REASONS: frozenset[str] = frozenset(
 
 def _map_stop_reason(val: Any, is_error: bool = False, api_status: int | None = None) -> str:
     """Map raw provider subtype/stop reason to a finite safe code set."""
+    if api_status in (401, 403) or val == "authentication_failed":
+        return "reauthentication_required"
     if api_status == 429:
         return "rate_limited"
     s = str(val or "").strip().lower()
@@ -248,6 +250,7 @@ class SDKRunner:
         env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
         env["CLAUDE_DO_NOT_TRACK"] = "1"
         env["DISABLE_TELEMETRY"] = "1"
+        env["DISABLE_AUTOUPDATER"] = "1"
 
         return env
 
@@ -358,9 +361,11 @@ class SDKRunner:
         submission_emitted = False
         seen_text_messages: set[str] = set()
         current_provider_msg_id: str | None = None
+        assistant_failure = None
         has_text_content = False
         pending_tool_use = False
         result_seen = False
+        started_emitted = False
         next_task = None
         cancel_task = None
         last_lease_check = time.monotonic()
@@ -437,7 +442,7 @@ class SDKRunner:
                 "permission_mode": "dontAsk",
                 "verbatim_prompts": True,
                 "include_partial_messages": True,
-                "disallowed_tools": list(DISALLOWED_BUILTIN_TOOLS),
+                "disallowed_tools": [*DISALLOWED_BUILTIN_TOOLS, "mcp__tms-execution__attach_evidence"],
                 "allowed_tools": merged_allowed_tools,
                 "mcp_servers": merged_mcp,
                 "max_turns": max_turns,
@@ -471,11 +476,21 @@ class SDKRunner:
                 )
                 raise RunFailure("sdk_initialization_failed", status_code=503) from err
 
-            # Emit started ONLY once options/query are ready
-            yield RuntimeEvent(kind="started", data={"model": spec.model})
+            # query() is lazy; startup is emitted only after its first successful iteration.
 
             # Message processing loop
             while True:
+                # Poll independently of event arrival: a continuously streaming provider
+                # must not postpone revocation checks indefinitely.
+                if spec.local_tools is not None and time.monotonic() - last_lease_check >= 5:
+                    try:
+                        active = await asyncio.wait_for(spec.local_tools.check_active(), timeout=5)
+                        if active is not True:
+                            raise RunFailure("credential_grant_inactive")
+                    except Exception:
+                        state, stop_reason = "failed", "credential_grant_inactive"
+                        break
+                    last_lease_check = time.monotonic()
                 remaining_time = spec.deadline_monotonic - time.monotonic()
                 if remaining_time <= 0:
                     state = "timed_out"
@@ -575,6 +590,10 @@ class SDKRunner:
                     stop_reason = "provider_error"
                     break
 
+                if not started_emitted:
+                    started_emitted = True
+                    yield RuntimeEvent(kind="started", data={"model": spec.model})
+
                 msg_type = type(message).__name__
                 is_stream_event = (
                     msg_type == "StreamEvent"
@@ -639,7 +658,7 @@ class SDKRunner:
                     # Provider message ID is in message_id (StreamEvent/AssistantMessage uuid is a distinct event UUID)
                     msg_id = _get(message, "message_id") or current_provider_msg_id
                     if not msg_id or msg_id not in seen_text_messages:
-                        content = _get(message, "content", []) or []
+                        content = [] if err else (_get(message, "content", []) or [])
                         for block in content:
                             text = _extract_text_from_block(block)
                             if text:
@@ -688,7 +707,9 @@ class SDKRunner:
                     subtype = _get(message, "subtype", "")
                     api_status = _get(message, "api_error_status")
 
-                    if subtype in ("error_max_turns", "max_turns"):
+                    if assistant_failure:
+                        state, stop_reason = "failed", assistant_failure
+                    elif subtype in ("error_max_turns", "max_turns"):
                         if spec.profile != "completion":
                             state = "failed"
                             stop_reason = "max_turns"
@@ -699,6 +720,8 @@ class SDKRunner:
                             else:
                                 state = "failed"
                                 stop_reason = "max_turns"
+                    elif spec.profile == "completion" and pending_tool_use:
+                        state, stop_reason = "failed", "unexpected_tool_use"
                     elif is_error:
                         state = "failed"
                         stop_reason = _map_stop_reason(subtype, is_error=True, api_status=api_status)
@@ -715,6 +738,9 @@ class SDKRunner:
                 if src:
                     submission_emitted = True
                     yield RuntimeEvent(kind="submission", data={"source": str(src)})
+
+            if assistant_failure:
+                state, stop_reason = "failed", assistant_failure
 
             # Stream ending without ResultMessage must fail with provider_stream_incomplete
             if not result_seen and state not in ("timed_out", "cancelled", "budget_exceeded", "failed"):

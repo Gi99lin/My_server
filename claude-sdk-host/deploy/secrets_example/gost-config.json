@@ -5,6 +5,6 @@
     "http://:8080"
   ],
   "ChainNodes": [
-    "socks5://placeholder-user:placeholder-password@172.31.240.50:1080"
+    "socks5://placeholder-user:placeholder-password@10.253.240.50:1080"
   ]
 }

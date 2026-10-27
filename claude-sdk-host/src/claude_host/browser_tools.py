@@ -474,6 +474,11 @@ class BrowserToolkit:
 
     async def _capture(self, page: Any, kind: str) -> bytes:
         if kind == "screenshot":
+            # PNG bytes do not retain visible text. Refuse known secret echoes
+            # in the rendered DOM before taking a masked screenshot.
+            visible = await page.locator("body").inner_text()
+            if self._holds_secret(visible.encode()):
+                raise ToolRefusal(SECRET_REFUSAL)
             masks = [field for field in self.session.secret_fields]
             return await page.screenshot(type="png", mask=masks, animations="disabled")
         if kind == "console":

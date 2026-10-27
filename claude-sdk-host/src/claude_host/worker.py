@@ -37,10 +37,12 @@ async def run(config_path: Path):
     loop.add_signal_handler(signal.SIGTERM, task.cancel)
     try:
         settings = load_settings(config_path)
-        line = await asyncio.to_thread(sys.stdin.buffer.readline, settings.max_body_bytes + 16384)
+        line = await asyncio.to_thread(sys.stdin.buffer.readline, settings.max_body_bytes * 4 + 65536)
         wire = json.loads(line)
         sid = wire["session_id"]
         payload = wire["payload"]
+        if not (settings.auth_dir / ".credentials.json").is_file():
+            raise RunFailure("reauthentication_required")
         profile = payload["profile"]
         local_tools = None
         mcp = {}

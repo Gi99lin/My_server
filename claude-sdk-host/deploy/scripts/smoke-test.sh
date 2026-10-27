@@ -45,6 +45,7 @@ if command -v jq >/dev/null 2>&1; then
     echo "  [OK] config.example.json is valid JSON"
     jq empty deploy/egress/gost.example.json
     echo "  [OK] deploy/egress/gost.example.json is valid JSON"
+    jq empty deploy/seccomp/seccomp-host.json
     jq empty deploy/seccomp/seccomp_profile.json
     echo "  [OK] deploy/seccomp/seccomp_profile.json is valid JSON"
 else
@@ -73,7 +74,7 @@ echo "mock-ca-cert-placeholder" > "$MOCK_SECRETS_DIR/providers/tms-credentials-c
 find "$MOCK_SECRETS_DIR" -type d -exec chmod 755 {} +
 find "$MOCK_SECRETS_DIR" -type f -exec chmod 644 {} +
 
-HOST_SECRETS_DIR="$MOCK_SECRETS_DIR" \
+HOST_SECRETS_DIR="$MOCK_SECRETS_DIR" EGRESS_UPSTREAM_IP=192.0.2.10 \
     docker compose config >/dev/null
 
 echo "  [OK] docker compose config passed with isolated mock secrets directory."

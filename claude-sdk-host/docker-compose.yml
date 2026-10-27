@@ -28,29 +28,30 @@ services:
       - no-new-privileges:true
     networks:
       sdk_clients:
-        ipv4_address: ${NETGUARD_CLIENTS_IP:-172.31.240.2}
+        ipv4_address: ${NETGUARD_CLIENTS_IP:-10.253.240.2}
         aliases:
           - claude-sdk-host
       sdk_tools:
-        ipv4_address: ${NETGUARD_TOOLS_IP:-172.31.240.18}
+        ipv4_address: ${NETGUARD_TOOLS_IP:-10.253.240.18}
         aliases:
           - claude-sdk-host
       sdk_proxy:
-        ipv4_address: ${NETGUARD_PROXY_IP:-172.31.240.34}
+        ipv4_address: ${NETGUARD_PROXY_IP:-10.253.240.34}
         aliases:
           - claude-sdk-host
     volumes:
+      - claude-network-state:/run/netguard
       - ${HOSTS_FILE:-./deploy/hosts}:/etc/hosts:ro
     tmpfs:
       - /tmp:size=16M,mode=1777
     environment:
       ROLE: host
-      CLIENTS_SUBNET: ${SDK_CLIENTS_SUBNET:-172.31.240.0/28}
-      TOOLS_SUBNET: ${SDK_TOOLS_SUBNET:-172.31.240.16/28}
-      PROXY_IP: ${EGRESS_PROXY_IP:-172.31.240.35}
+      CLIENTS_SUBNET: ${SDK_CLIENTS_SUBNET:-10.253.240.0/28}
+      TOOLS_SUBNET: ${SDK_TOOLS_SUBNET:-10.253.240.16/28}
+      PROXY_IP: ${EGRESS_PROXY_IP:-10.253.240.35}
       PROXY_PORT: 8080
       API_PORT: 8080
-      ALLOWED_INTERNAL_IPS: ${ALLOWED_INTERNAL_IPS:-172.31.240.20,172.31.240.21}
+      ALLOWED_INTERNAL_IPS: ${ALLOWED_INTERNAL_IPS:-10.253.240.20,10.253.240.21}
       ALLOWED_INTERNAL_PORTS: ${ALLOWED_INTERNAL_PORTS:-8000,8443}
     healthcheck:
       test: ["CMD", "nft", "list", "table", "inet", "netguard"]
@@ -83,7 +84,7 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-      - seccomp:deploy/seccomp/seccomp_profile.json
+      - seccomp:deploy/seccomp/seccomp-host.json
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     deploy:
       resources:
@@ -96,14 +97,15 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
       CLAUDE_HOST_CONFIG: "/run/secrets/host-config.json"
       CLAUDE_CONFIG_DIR: "/var/lib/claude-auth"
-      HTTP_PROXY: "http://${EGRESS_PROXY_IP:-172.31.240.35}:8080"
-      HTTPS_PROXY: "http://${EGRESS_PROXY_IP:-172.31.240.35}:8080"
-      http_proxy: "http://${EGRESS_PROXY_IP:-172.31.240.35}:8080"
-      https_proxy: "http://${EGRESS_PROXY_IP:-172.31.240.35}:8080"
-      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,172.31.240.20,172.31.240.21}"
-      no_proxy: "${NO_PROXY:-localhost,127.0.0.1,172.31.240.20,172.31.240.21}"
+      HTTP_PROXY: "http://${EGRESS_PROXY_IP:-10.253.240.35}:8080"
+      HTTPS_PROXY: "http://${EGRESS_PROXY_IP:-10.253.240.35}:8080"
+      http_proxy: "http://${EGRESS_PROXY_IP:-10.253.240.35}:8080"
+      https_proxy: "http://${EGRESS_PROXY_IP:-10.253.240.35}:8080"
+      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,10.253.240.20,10.253.240.21}"
+      no_proxy: "${NO_PROXY:-localhost,127.0.0.1,10.253.240.20,10.253.240.21}"
     volumes:
       - ${HOST_SECRETS_DIR:?Set HOST_SECRETS_DIR to an operator-owned directory outside Git}:/run/secrets:ro
+      - claude-network-state:/run/netguard:ro
       - claude-auth:/var/lib/claude-auth
       - claude-journal:/var/lib/claude-host
     tmpfs:
@@ -136,11 +138,11 @@ services:
       - no-new-privileges:true
     networks:
       sdk_proxy:
-        ipv4_address: ${EGRESS_PROXY_IP:-172.31.240.35}
+        ipv4_address: ${EGRESS_PROXY_IP:-10.253.240.35}
         aliases:
           - sdk-egress
       sdk_upstream:
-        ipv4_address: ${EGRESS_UPSTREAM_CLIENT_IP:-172.31.240.50}
+        ipv4_address: ${EGRESS_UPSTREAM_CLIENT_IP:-10.253.240.50}
         aliases:
           - sdk-egress
     volumes:
@@ -149,7 +151,7 @@ services:
       - /tmp:size=16M,mode=1777
     environment:
       ROLE: egress
-      PROXY_SUBNET: ${SDK_PROXY_SUBNET:-172.31.240.32/28}
+      PROXY_SUBNET: ${SDK_PROXY_SUBNET:-10.253.240.32/28}
       LISTEN_PORT: 8080
       UPSTREAM_IPS: ${EGRESS_UPSTREAM_IP:?Set numeric upstream proxy IP}
       UPSTREAM_PORTS: ${EGRESS_UPSTREAM_PORT:-1080}
@@ -169,6 +171,7 @@ services:
       dockerfile: deploy/egress/Dockerfile
     image: claude-sdk-egress:local
     container_name: claude-sdk-egress
+    user: "1000:1000"
     restart: unless-stopped
     network_mode: "service:sdk-egress-guard"
     depends_on:
@@ -180,7 +183,7 @@ services:
     security_opt:
       - no-new-privileges:true
     volumes:
-      - ${HOST_SECRETS_DIR:?Set HOST_SECRETS_DIR to an operator-owned directory outside Git}:/run/secrets:ro
+      - ${HOST_SECRETS_DIR:?Set HOST_SECRETS_DIR to an operator-owned directory outside Git}/gost-config.json:/run/secrets/gost-config.json:ro
     tmpfs:
       - /tmp:size=16M,mode=1777
     environment:
@@ -204,8 +207,8 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: ${SDK_CLIENTS_SUBNET:-172.31.240.0/28}
-          gateway: ${SDK_CLIENTS_GATEWAY:-172.31.240.1}
+        - subnet: ${SDK_CLIENTS_SUBNET:-10.253.240.0/28}
+          gateway: ${SDK_CLIENTS_GATEWAY:-10.253.240.1}
 
   # Internal: Registered tool, MCP, credential and stand endpoints
   sdk_tools:
@@ -215,8 +218,8 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: ${SDK_TOOLS_SUBNET:-172.31.240.16/28}
-          gateway: ${SDK_TOOLS_GATEWAY:-172.31.240.17}
+        - subnet: ${SDK_TOOLS_SUBNET:-10.253.240.16/28}
+          gateway: ${SDK_TOOLS_GATEWAY:-10.253.240.17}
 
   # Internal: netguard egress-proxy interface to sdk-egress HTTP listener
   sdk_proxy:
@@ -226,8 +229,8 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: ${SDK_PROXY_SUBNET:-172.31.240.32/28}
-          gateway: ${SDK_PROXY_GATEWAY:-172.31.240.33}
+        - subnet: ${SDK_PROXY_SUBNET:-10.253.240.32/28}
+          gateway: ${SDK_PROXY_GATEWAY:-10.253.240.33}
 
   # Uplink: sdk-egress-guard connection to external/host upstream proxy
   sdk_upstream:
@@ -237,13 +240,15 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: ${SDK_UPSTREAM_SUBNET:-172.31.240.48/28}
-          gateway: ${SDK_UPSTREAM_GATEWAY:-172.31.240.49}
+        - subnet: ${SDK_UPSTREAM_SUBNET:-10.253.240.48/28}
+          gateway: ${SDK_UPSTREAM_GATEWAY:-10.253.240.49}
 
 # ==============================================================================
 # Persistent Named Volumes
 # ==============================================================================
 volumes:
+  claude-network-state:
+    name: claude_sdk_network_state
   # Restricted official Claude authentication state
   claude-auth:
     name: claude_sdk_auth

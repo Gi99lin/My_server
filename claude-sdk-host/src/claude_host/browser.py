@@ -155,8 +155,18 @@ class BrowserSession:
             self._playwright = await async_playwright().start()
             self._browser = await self._playwright.chromium.launch(**launch_kwargs)
 
+            approved = origin_of(self._stand_address)
+            assert approved is not None
+            scheme, host, port = approved
+            hostname = f"[{host}]" if ":" in host else host
+            suffix = "" if port == (443 if scheme == "https" else 80) else f":{port}"
+            credential_origin = f"{scheme}://{hostname}{suffix}"
             credentials = (
-                {"username": self._http_credentials[0], "password": self._http_credentials[1]}
+                {
+                    "username": self._http_credentials[0],
+                    "password": self._http_credentials[1],
+                    "origin": credential_origin,
+                }
                 if self._http_credentials
                 else None
             )

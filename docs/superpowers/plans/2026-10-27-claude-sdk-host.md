@@ -16,7 +16,7 @@
 - All implementation lives under `claude-sdk-host/`; root README and documentation are coordinator-owned.
 - No production deployment, credential extraction, public endpoint, API-key fallback, Docker socket, root Chromium or direct external egress.
 - No new automated test suite for this API/infra project under the owner's global instruction. Verify with manual HTTP/SDK/container probes and record exact evidence. Existing TMS tests remain in place and are run when TMS code changes.
-- Gemini 3.8 Flash Medium is available in `agy 1.4.8`; use `--mode auto`, not blanket permission bypass. Keep agents in their own worktrees.
+- Gemini 3.8 Flash Medium is available in `agy 1.4.8`; the owner explicitly approved `--dangerously-skip-permissions` for the three prepared isolated lanes after `auto` proved unavailable. No server, secret inspection or deployment authority was delegated.
 - Local Docker has 5.78 GiB RAM; only coordinator runs a container stack. Lanes use syntax/import and focused process-level probes.
 - No secret values in source, examples, prompts, logs or reports.
 

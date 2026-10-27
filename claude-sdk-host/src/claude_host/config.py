@@ -108,7 +108,7 @@ class Settings(BaseModel):
     consumer_timeout_seconds: float = Field(default=30, gt=0, le=30)
     submission_retention_seconds: float = Field(default=30, gt=0, le=30)
     completion_timeout_seconds: float = Field(default=300, gt=0, le=300)
-    max_agent_seconds: int = Field(default=1800, ge=1, le=7200)
+    max_agent_seconds: int = Field(default=14400, ge=1, le=604800)
     max_agent_tokens: int = Field(default=2_000_000, ge=1, le=10_000_000)
     max_body_bytes: int = Field(default=262_144, ge=1024, le=1_048_576)
     max_journal_bytes: int = Field(default=268_435_456, ge=1_048_576)
@@ -157,6 +157,9 @@ class Settings(BaseModel):
         result.update(
             {
                 "HOME": str(self.auth_dir.parent),
+                "PLAYWRIGHT_BROWSERS_PATH": "/ms-playwright",
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "PYTHONUNBUFFERED": "1",
                 "CLAUDE_CONFIG_DIR": str(self.auth_dir),
                 "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
                 "DISABLE_AUTOUPDATER": "1",
