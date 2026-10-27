@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
-from .config import Application, Settings, endpoint
+from .config import Application, Settings
 from .contracts import RunFailure
 
 
@@ -71,10 +71,21 @@ class AgentRequest(StrictRequest):
             raise RunFailure("credential_provider_not_allowed", 403)
         # Browser origin is a navigation boundary, not an arbitrary request URL.
         try:
-            endpoint(self.browser.origin)
             p = urlsplit(self.browser.origin)
-            if p.path not in {"", "/"}:
+            if (
+                p.scheme not in {"http", "https"}
+                or not p.hostname
+                or p.username is not None
+                or p.password is not None
+                or p.path not in {"", "/"}
+                or p.query
+                or p.fragment
+            ):
                 raise ValueError
+            if p.port is not None and not 1 <= p.port <= 65535:
+                raise ValueError
+            # A localhost stand origin is valid only with a redeemed, registered
+            # tunnel route. The trusted worker enforces that before browser startup.
         except ValueError:
             raise RunFailure("invalid_stand_origin", 400) from None
         execution_tools = {"next_point", "start_attempt", "record_step", "finish_attempt", "hand_off"}

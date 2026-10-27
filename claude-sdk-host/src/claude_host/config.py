@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
+import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -81,6 +83,32 @@ class CredentialProvider(BaseModel):
     url: str
     token_file: Path
     ca_file: Path | None = None
+    tunnel_host: str | None = None
+    tunnel_port_min: int = Field(default=42000, ge=1, le=65535)
+    tunnel_port_max: int = Field(default=42999, ge=1, le=65535)
+
+    @model_validator(mode="after")
+    def valid_tunnel(self):
+        if self.tunnel_port_min > self.tunnel_port_max:
+            raise ValueError("invalid tunnel port range")
+        if self.tunnel_host:
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,252}", self.tunnel_host):
+                raise ValueError("invalid tunnel relay host")
+            try:
+                address = ipaddress.ip_address(self.tunnel_host)
+            except ValueError:
+                if self.tunnel_host.lower() == "localhost":
+                    raise ValueError("relay must be a registered Docker peer") from None
+            else:
+                if (
+                    address.version != 4
+                    or address.is_loopback
+                    or address.is_link_local
+                    or address.is_unspecified
+                    or address.is_multicast
+                ):
+                    raise ValueError("relay must be a registered Docker IPv4 peer")
+        return self
 
     @field_validator("url")
     @classmethod
@@ -132,6 +160,9 @@ class Settings(BaseModel):
             raise ValueError("application ids must be unique")
         if any(not value or any(c.isspace() for c in value) for value in self.models.values()):
             raise ValueError("model ids must be nonempty names")
+        for provider in self.credential_providers.values():
+            if provider.tunnel_host and provider.tunnel_host not in self.proxy_bypass:
+                raise ValueError("tunnel relay must have an exact internal bypass entry")
         for app in self.applications:
             if not set(app.models) <= self.models.keys():
                 raise ValueError("application refers to unregistered model")
