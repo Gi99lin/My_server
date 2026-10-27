@@ -85,17 +85,96 @@ FORBIDDEN_ENV_KEYS: frozenset[str] = frozenset({
     "ANTHROPIC_BASE_URL",
     "ANTHROPIC_PROVIDER",
     "API_KEY",
+    "CLAUDE_BASE_URL",
+    "OAUTH_TOKEN",
+    "CLAUDE_OAUTH_TOKEN",
+    "ANTHROPIC_OAUTH_TOKEN",
 })
 
-SENSITIVE_ENV_MARKERS: tuple[str, ...] = (
-    "SECRET",
-    "PASSWORD",
-    "PASSWD",
-    "TOKEN",
-    "KEY",
-    "CREDENTIAL",
-    "ENCRYPTION",
-)
+SAFE_STOP_REASONS: frozenset[str] = frozenset({
+    "end_turn",
+    "max_turns",
+    "stop_sequence",
+    "tool_use",
+    "cancelled",
+    "deadline_exceeded",
+    "budget_exceeded",
+    "provider_error",
+    "rate_limited",
+    "provider_stream_incomplete",
+    "credential_grant_inactive",
+    "missing_author_submission",
+})
+
+
+def _map_stop_reason(val: Any, is_error: bool = False, api_status: int | None = None) -> str:
+    """Map raw provider subtype/stop reason to a finite safe code set."""
+    if api_status == 429:
+        return "rate_limited"
+    s = str(val or "").strip().lower()
+    if s in ("end_turn", "success"):
+        return "end_turn"
+    if s in ("stop_sequence",):
+        return "stop_sequence"
+    if s in ("tool_use",):
+        return "tool_use"
+    if s in ("max_turns", "error_max_turns"):
+        return "max_turns"
+    if s in ("rate_limit", "rate_limited"):
+        return "rate_limited"
+    if s in ("cancelled",):
+        return "cancelled"
+    if s in ("deadline_exceeded", "timed_out"):
+        return "deadline_exceeded"
+    if s in ("budget_exceeded",):
+        return "budget_exceeded"
+    if s in ("credential_grant_inactive",):
+        return "credential_grant_inactive"
+    if s in ("missing_author_submission",):
+        return "missing_author_submission"
+    if s in ("provider_stream_incomplete",):
+        return "provider_stream_incomplete"
+    # Never forward arbitrary provider strings
+    return "provider_error" if is_error else "end_turn"
+
+
+def _extract_text_from_block(block: Any) -> str | None:
+    """Extract plain text from an SDK TextBlock or dict block."""
+    if isinstance(block, dict):
+        if block.get("type") == "text":
+            return block.get("text")
+        return None
+    cls_name = type(block).__name__
+    if cls_name in (
+        "ThinkingBlock",
+        "ToolUseBlock",
+        "ToolResultBlock",
+        "ServerToolUseBlock",
+        "ServerToolResultBlock",
+    ):
+        return None
+    b_type = getattr(block, "type", None)
+    if b_type in ("thinking", "tool_use", "tool_result"):
+        return None
+    if hasattr(block, "text") and isinstance(block.text, str):
+        return block.text
+    return None
+
+
+def _has_tool_use_in_message(message: Any) -> bool:
+    """Check if message content contains tool use blocks."""
+    content = _get(message, "content", []) or []
+    for block in content:
+        if isinstance(block, dict):
+            if block.get("type") in ("tool_use", "server_tool_use"):
+                return True
+        else:
+            cls_name = type(block).__name__
+            if cls_name in ("ToolUseBlock", "ServerToolUseBlock"):
+                return True
+            if getattr(block, "type", None) in ("tool_use", "server_tool_use"):
+                return True
+    return False
 
 
 def _load_sdk() -> Any:
@@ -136,22 +215,25 @@ class SDKRunner:
     def _build_subprocess_env(self) -> dict[str, str]:
         """Construct allowlisted child environment and blank out credentials.
 
-        Never mutates global os.environ.
+        Child SDK merges supplied env with os.environ: blank every inherited
+        key in os.environ that is not in ALLOWLISTED_ENV_KEYS. Ensure no
+        OAuth/API/provider overrides survive. Keep operator auth path and
+        fixed proxy values. Never mutates global os.environ.
         """
         env: dict[str, str] = {}
 
-        # 1. Blank out any secret-looking variable from parent process environment
+        # 1. Blank every inherited key in os.environ that is not in the allowlist
         for key in os.environ:
-            if key in FORBIDDEN_ENV_KEYS or any(marker in key.upper() for marker in SENSITIVE_ENV_MARKERS):
+            if key not in ALLOWLISTED_ENV_KEYS:
                 env[key] = ""
 
-        # 2. Select only allowlisted keys from operator environment (or os.environ)
+        # 2. Select allowlisted keys from operator environment (or os.environ)
         source = self._operator_env if self._operator_env is not None else os.environ
-        for key, val in source.items():
-            if key in ALLOWLISTED_ENV_KEYS:
-                env[key] = str(val)
+        for key in ALLOWLISTED_ENV_KEYS:
+            if key in source:
+                env[key] = str(source[key])
 
-        # 3. Explicitly reject/clear API key / provider / base url fallbacks
+        # 3. Explicitly reject/clear API key / provider / OAuth / base url fallbacks
         for key in FORBIDDEN_ENV_KEYS:
             env[key] = ""
 
@@ -165,8 +247,9 @@ class SDKRunner:
     def cancel(self, session_id: str) -> Any:
         """Interrupt and cancel a running session query.
 
-        Interrupts the active stream/client, closes the stream, and signals cancellation.
-        Returns an awaitable Task so callers can optionally await completion.
+        Interrupts the active stream/client and sets the cancellation signal.
+        Does not call stream.aclose() while __anext__ is running.
+        Returns an awaitable Task for bounded interrupt execution.
         """
         session = self._sessions.get(session_id)
         if session is None:
@@ -178,30 +261,28 @@ class SDKRunner:
         session.cancelled = True
         session.cancel_event.set()
 
-        async def _interrupt_and_close() -> None:
+        async def _interrupt() -> None:
             stream = session.stream
-            if stream is not None:
-                if hasattr(stream, "interrupt"):
-                    try:
-                        res = stream.interrupt()
-                        if inspect.isawaitable(res):
-                            await res
-                    except Exception as err:
-                        logger.warning("Interrupt error on session %s: %s", session_id, type(err).__name__)
-                if hasattr(stream, "aclose"):
-                    try:
-                        await stream.aclose()
-                    except Exception as err:
-                        logger.warning("Stream aclose error on session %s: %s", session_id, type(err).__name__)
+            if stream is not None and hasattr(stream, "interrupt"):
+                try:
+                    res = stream.interrupt()
+                    if inspect.isawaitable(res):
+                        await asyncio.wait_for(res, timeout=5.0)
+                except Exception as err:
+                    logger.warning("Interrupt error on session %s: %s", session_id, type(err).__name__)
 
-        return asyncio.create_task(_interrupt_and_close())
+        return asyncio.create_task(_interrupt())
 
     async def run(self, spec: RunSpec) -> AsyncIterator[RuntimeEvent]:
         """Run an SDK query or agent session yielding structured RuntimeEvents."""
         # 1. Verification before run initialization
         now = time.monotonic()
-        if spec.deadline_monotonic <= now:
+        remaining = spec.deadline_monotonic - now
+        if remaining <= 0:
             raise RunFailure("deadline_exceeded", status_code=504)
+
+        if spec.token_budget_remaining <= 0:
+            raise RunFailure("budget_exhausted", status_code=400)
 
         if spec.session_id in self._sessions:
             raise RunFailure("session_already_active", status_code=409)
@@ -214,12 +295,39 @@ class SDKRunner:
                 logger.error("Claude Agent SDK is not installed")
                 raise RunFailure("sdk_unavailable", status_code=503) from err
 
+        # 2. Local tools startup within remaining deadline
         if spec.local_tools is not None:
+            rem = spec.deadline_monotonic - time.monotonic()
+            if rem <= 0:
+                raise RunFailure("deadline_exceeded", status_code=504)
             try:
-                await spec.local_tools.start()
+                await asyncio.wait_for(spec.local_tools.start(), timeout=rem)
+            except (asyncio.TimeoutError, TimeoutError) as err:
+                logger.error("Local tools startup timed out for session %s", spec.session_id)
+                if hasattr(spec.local_tools, "aclose"):
+                    try:
+                        await asyncio.wait_for(spec.local_tools.aclose(), timeout=5.0)
+                    except Exception:
+                        pass
+                raise RunFailure("deadline_exceeded", status_code=504) from err
             except Exception as err:
                 logger.error("Failed to start local tools for session %s: %s", spec.session_id, type(err).__name__)
+                if hasattr(spec.local_tools, "aclose"):
+                    try:
+                        await asyncio.wait_for(spec.local_tools.aclose(), timeout=5.0)
+                    except Exception:
+                        pass
                 raise RunFailure("local_tools_start_failed", status_code=503) from err
+
+        # 3. Workdir setup within remaining deadline
+        rem = spec.deadline_monotonic - time.monotonic()
+        if rem <= 0:
+            if spec.local_tools is not None and hasattr(spec.local_tools, "aclose"):
+                try:
+                    await asyncio.wait_for(spec.local_tools.aclose(), timeout=5.0)
+                except Exception:
+                    pass
+            raise RunFailure("deadline_exceeded", status_code=504)
 
         workdir: Path
         owns_workdir = False
@@ -241,11 +349,13 @@ class SDKRunner:
         accounting_complete = False
         submission_emitted = False
         seen_text_messages: set[str] = set()
+        current_provider_msg_id: str | None = None
+        has_text_content = False
+        pending_tool_use = False
+        result_seen = False
+        last_lease_check = time.monotonic()
 
         try:
-            # Yield started event once run is initialized
-            yield RuntimeEvent(kind="started", data={"model": spec.model})
-
             # Merge MCP servers and declared tool names from local tools
             local_mcp: dict[str, Any] = {}
             local_tool_names: list[str] = []
@@ -285,9 +395,9 @@ class SDKRunner:
                     }
                 if spec.local_tools is not None and hasattr(spec.local_tools, "check_active"):
                     try:
-                        active = await spec.local_tools.check_active()
+                        active = await asyncio.wait_for(spec.local_tools.check_active(), timeout=5.0)
                         if not active:
-                            reason = "Local tools session is inactive"
+                            reason = "credential_grant_inactive"
                             return {
                                 "decision": "block",
                                 "reason": reason,
@@ -297,8 +407,8 @@ class SDKRunner:
                                     "permissionDecisionReason": reason,
                                 },
                             }
-                    except Exception as exc:
-                        reason = f"Local tools check_active failed: {type(exc).__name__}"
+                    except Exception:
+                        reason = "credential_grant_inactive"
                         return {
                             "decision": "block",
                             "reason": reason,
@@ -309,12 +419,6 @@ class SDKRunner:
                             },
                         }
                 return {}
-
-            hooks: dict[str, list[Any]] = {}
-            if hasattr(sdk, "HookMatcher"):
-                hooks = {"PreToolUse": [sdk.HookMatcher(hooks=[pre_tool_use_hook])]}
-            else:
-                hooks = {"PreToolUse": [{"hooks": [pre_tool_use_hook]}]}
 
             max_turns = 1 if spec.profile == "completion" else spec.max_turns
 
@@ -328,7 +432,6 @@ class SDKRunner:
                 "disallowed_tools": list(DISALLOWED_BUILTIN_TOOLS),
                 "allowed_tools": merged_allowed_tools,
                 "mcp_servers": merged_mcp,
-                "hooks": hooks,
                 "max_turns": max_turns,
                 "cwd": str(workdir),
                 "env": self._build_subprocess_env(),
@@ -340,14 +443,24 @@ class SDKRunner:
             if hasattr(spec, "agents") and getattr(spec, "agents"):
                 options_kwargs["agents"] = getattr(spec, "agents")
 
-            if hasattr(sdk, "ClaudeAgentOptions"):
-                options = sdk.ClaudeAgentOptions(**options_kwargs)
-            else:
-                # Custom deterministic SDK object in probes
-                options = options_kwargs
+            # No capability fallbacks in production: construct real HookMatcher and ClaudeAgentOptions
+            try:
+                if not hasattr(sdk, "ClaudeAgentOptions") or not hasattr(sdk, "HookMatcher"):
+                    raise RunFailure("sdk_unavailable", status_code=503)
 
-            stream = sdk.query(prompt=spec.prompt, options=options)
-            session_state.stream = stream
+                hooks = {"PreToolUse": [sdk.HookMatcher(hooks=[pre_tool_use_hook])]}
+                options_kwargs["hooks"] = hooks
+                options = sdk.ClaudeAgentOptions(**options_kwargs)
+                stream = sdk.query(prompt=spec.prompt, options=options)
+                session_state.stream = stream
+            except RunFailure:
+                raise
+            except Exception as err:
+                logger.error("SDK options/query initialization failed for session %s: %s", spec.session_id, type(err).__name__)
+                raise RunFailure("sdk_initialization_failed", status_code=503) from err
+
+            # Emit started ONLY once options/query are ready
+            yield RuntimeEvent(kind="started", data={"model": spec.model})
 
             # Message processing loop
             while True:
@@ -376,24 +489,69 @@ class SDKRunner:
                 next_task = asyncio.create_task(stream.__anext__())
                 cancel_task = asyncio.create_task(session_state.cancel_event.wait())
 
-                done, pending = await asyncio.wait(
-                    [next_task, cancel_task],
-                    timeout=remaining_time,
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
+                # Wait for next message while continuously guarding active lease every <= 5s
+                while not next_task.done():
+                    now = time.monotonic()
+                    rem = spec.deadline_monotonic - now
+                    if rem <= 0:
+                        state = "timed_out"
+                        stop_reason = "deadline_exceeded"
+                        break
 
-                for task in pending:
-                    task.cancel()
+                    if session_state.cancelled or session_state.cancel_event.is_set():
+                        state = "cancelled"
+                        stop_reason = "cancelled"
+                        break
 
-                if not done:
-                    state = "timed_out"
-                    stop_reason = "deadline_exceeded"
+                    time_to_lease = max(0.05, 5.0 - (now - last_lease_check))
+                    timeout = min(rem, time_to_lease)
+
+                    done, _ = await asyncio.wait(
+                        [next_task, cancel_task],
+                        timeout=timeout,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+
+                    if cancel_task in done or session_state.cancelled or session_state.cancel_event.is_set():
+                        state = "cancelled"
+                        stop_reason = "cancelled"
+                        break
+
+                    if next_task in done:
+                        break
+
+                    if time.monotonic() >= spec.deadline_monotonic:
+                        state = "timed_out"
+                        stop_reason = "deadline_exceeded"
+                        break
+
+                    if spec.local_tools is not None and hasattr(spec.local_tools, "check_active"):
+                        if time.monotonic() - last_lease_check >= 5.0:
+                            try:
+                                active = await asyncio.wait_for(spec.local_tools.check_active(), timeout=5.0)
+                                if not active:
+                                    state = "failed"
+                                    stop_reason = "credential_grant_inactive"
+                                    break
+                            except Exception:
+                                state = "failed"
+                                stop_reason = "credential_grant_inactive"
+                                break
+                            last_lease_check = time.monotonic()
+
+                # If broken due to timeout, cancellation, or grant inactivity:
+                if state in ("timed_out", "cancelled", "failed"):
+                    if not next_task.done():
+                        next_task.cancel()
+                    cancel_task.cancel()
+                    await asyncio.gather(next_task, cancel_task, return_exceptions=True)
                     break
 
-                if cancel_task in done and session_state.cancel_event.is_set():
-                    state = "cancelled"
-                    stop_reason = "cancelled"
-                    break
+                cancel_task.cancel()
+                try:
+                    await cancel_task
+                except asyncio.CancelledError:
+                    pass
 
                 try:
                     message = next_task.result()
@@ -431,17 +589,21 @@ class SDKRunner:
                 if is_stream_event:
                     event = _get(message, "event", {})
                     if isinstance(event, dict):
-                        # Text delta extraction
-                        if event.get("type") == "content_block_delta":
+                        e_type = event.get("type")
+                        if e_type == "message_start":
+                            msg = event.get("message", {})
+                            if isinstance(msg, dict) and msg.get("id"):
+                                current_provider_msg_id = str(msg.get("id"))
+                        elif e_type == "content_block_delta":
                             delta = event.get("delta", {})
                             if isinstance(delta, dict) and delta.get("type") == "text_delta":
                                 text = delta.get("text")
                                 if text:
-                                    msg_id = _get(message, "uuid") or "stream"
-                                    seen_text_messages.add(msg_id)
+                                    has_text_content = True
+                                    if current_provider_msg_id:
+                                        seen_text_messages.add(current_provider_msg_id)
                                     yield RuntimeEvent(kind="text_delta", data={"text": text})
 
-                    # Usage observation from StreamEvent
                     for usage_delta in meter.observe(message):
                         yield RuntimeEvent(kind="usage", data=usage_delta)
                         if spec.token_budget_remaining > 0 and meter.total_budget_tokens >= spec.token_budget_remaining:
@@ -458,17 +620,22 @@ class SDKRunner:
                         state = "failed"
                         stop_reason = "provider_error"
 
-                    msg_id = _get(message, "message_id") or _get(message, "uuid") or "assistant"
-                    # If text was not already streamed via text deltas, emit text blocks now
-                    if msg_id not in seen_text_messages:
+                    # Provider message ID is in message_id (StreamEvent/AssistantMessage uuid is a distinct event UUID)
+                    msg_id = _get(message, "message_id") or current_provider_msg_id
+                    if not msg_id or msg_id not in seen_text_messages:
                         content = _get(message, "content", []) or []
                         for block in content:
-                            b_type = _get(block, "type", "")
-                            # Text only: never forward thinking, raw tool payloads, headers or exceptions
-                            if b_type not in ("thinking", "tool_use", "tool_result"):
-                                text = _get(block, "text")
-                                if text:
-                                    yield RuntimeEvent(kind="text_delta", data={"text": text})
+                            text = _extract_text_from_block(block)
+                            if text:
+                                has_text_content = True
+                                yield RuntimeEvent(kind="text_delta", data={"text": text})
+                        if msg_id:
+                            seen_text_messages.add(msg_id)
+
+                    if _has_tool_use_in_message(message):
+                        pending_tool_use = True
+                    else:
+                        pending_tool_use = False
 
                     for usage_delta in meter.observe(message):
                         yield RuntimeEvent(kind="usage", data=usage_delta)
@@ -491,30 +658,39 @@ class SDKRunner:
 
                 # 4. ResultMessage
                 elif is_result_message:
+                    result_seen = True
                     for usage_delta in meter.observe(message):
                         yield RuntimeEvent(kind="usage", data=usage_delta)
 
+                    # Recheck final observed budget after ResultMessage, not only partial messages
+                    if spec.token_budget_remaining > 0 and meter.total_budget_tokens >= spec.token_budget_remaining:
+                        state = "budget_exceeded"
+                        stop_reason = "budget_exceeded"
+                        break
+
                     is_error = bool(_get(message, "is_error", False))
                     subtype = _get(message, "subtype", "")
+                    api_status = _get(message, "api_error_status")
 
-                    if is_error:
-                        if subtype in ("error_max_turns", "max_turns"):
-                            state = "completed"
+                    if subtype in ("error_max_turns", "max_turns"):
+                        if spec.profile != "completion":
+                            state = "failed"
                             stop_reason = "max_turns"
                         else:
-                            state = "failed"
-                            api_status = _get(message, "api_error_status")
-                            if api_status == 429:
-                                stop_reason = "rate_limited"
-                            elif api_status in (500, 502, 503, 504, 529):
-                                stop_reason = "provider_error"
+                            if has_text_content and not pending_tool_use:
+                                state = "completed"
+                                stop_reason = "max_turns"
                             else:
-                                stop_reason = "provider_error" if not subtype else subtype
+                                state = "failed"
+                                stop_reason = "max_turns"
+                    elif is_error:
+                        state = "failed"
+                        stop_reason = _map_stop_reason(subtype, is_error=True, api_status=api_status)
                     else:
                         state = "completed"
-                        stop_reason = _get(message, "stop_reason") or subtype or "end_turn"
+                        raw_stop = _get(message, "stop_reason") or subtype
+                        stop_reason = _map_stop_reason(raw_stop, is_error=False)
 
-                    accounting_complete = meter.is_accounting_complete()
                     break
 
             # Final check for accepted_source before terminal
@@ -524,10 +700,18 @@ class SDKRunner:
                     submission_emitted = True
                     yield RuntimeEvent(kind="submission", data={"source": str(src)})
 
-            if meter.is_accounting_complete():
-                accounting_complete = True
-            else:
-                accounting_complete = False
+            # Stream ending without ResultMessage must fail with provider_stream_incomplete
+            if not result_seen and state not in ("timed_out", "cancelled", "budget_exceeded", "failed"):
+                state = "failed"
+                stop_reason = "provider_stream_incomplete"
+
+            # Authoring requires accepted_source before success
+            if "author" in spec.profile.lower() and state == "completed":
+                if not submission_emitted:
+                    state = "failed"
+                    stop_reason = "missing_author_submission"
+
+            accounting_complete = (state == "completed" and meter.is_accounting_complete())
 
             yield RuntimeEvent(
                 kind="terminal",
@@ -538,24 +722,38 @@ class SDKRunner:
                 },
             )
 
+        except asyncio.CancelledError:
+            state = "cancelled"
+            stop_reason = "cancelled"
+            accounting_complete = False
+            yield RuntimeEvent(
+                kind="terminal",
+                data={
+                    "state": state,
+                    "stop_reason": stop_reason,
+                    "accounting_complete": accounting_complete,
+                },
+            )
+            raise
+
         finally:
             if stream is not None:
                 if hasattr(stream, "interrupt") and (session_state.cancelled or state != "completed"):
                     try:
                         res = stream.interrupt()
                         if inspect.isawaitable(res):
-                            await res
+                            await asyncio.wait_for(res, timeout=5.0)
                     except Exception:
                         pass
                 if hasattr(stream, "aclose"):
                     try:
-                        await stream.aclose()
+                        await asyncio.wait_for(stream.aclose(), timeout=5.0)
                     except Exception:
                         pass
 
             if spec.local_tools is not None and hasattr(spec.local_tools, "aclose"):
                 try:
-                    await spec.local_tools.aclose()
+                    await asyncio.wait_for(spec.local_tools.aclose(), timeout=5.0)
                 except Exception as err:
                     logger.warning("local_tools aclose error: %s", type(err).__name__)
 
