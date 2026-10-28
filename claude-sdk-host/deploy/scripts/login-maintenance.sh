@@ -33,7 +33,7 @@ if [ ! -x "$CLI_PATH" ] && [ "$CLI_PATH" != "claude" ]; then
     chmod +x "$CLI_PATH" 2>/dev/null || true
 fi
 echo "Starting official Claude authentication flow..."
-exec "$CLI_PATH" auth login
+exec "$CLI_PATH" auth login --claudeai
 '
 
 if docker compose ps --services --filter "status=running" 2>/dev/null | grep -q "^claude-sdk-host$"; then

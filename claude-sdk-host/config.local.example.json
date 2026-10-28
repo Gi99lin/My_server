@@ -1,0 +1,15 @@
+{
+  "auth_dir": "/var/lib/claude-auth",
+  "journal_path": "/var/lib/claude-host/journal.sqlite3",
+  "work_dir": "/tmp/claude-host",
+  "network_ready_file": "/run/netguard/ready",
+  "proxy_url": "http://10.253.240.35:8080",
+  "proxy_bypass": ["localhost", "127.0.0.1"],
+  "models": {"claude-personal-default": "claude-sonnet-5-5"},
+  "applications": [{
+    "id": "local-owner", "owner": "personal-owner",
+    "token_file": "/run/secrets/apps/local-owner.token",
+    "scopes": ["completion"], "models": ["claude-personal-default"]
+  }],
+  "idempotency_key_file": "/run/secrets/idempotency.key"
+}

@@ -1,0 +1,24 @@
+{
+  "prepared_on": "2026-10-28",
+  "tms_reviewed_revision": "cb527ea35b31b45f90487351cf7e62e4acaf1d3a",
+  "tms_integration_branch": "codex/claude-host-integration",
+  "host_protocol": "v1",
+  "model_alias": "claude-personal-default",
+  "host_application_id": "tms",
+  "credential_provider_id": "tms",
+  "profiles": [
+    "tms-execution",
+    "tms-authoring"
+  ],
+  "repair_composes_profiles": true,
+  "validation": {
+    "affected_passed": 675,
+    "affected_skipped": 13,
+    "pipeline_library_passed": 58,
+    "independent_contract_passed": 6,
+    "repair_seam_passed": 39
+  },
+  "activation_performed": false,
+  "live_inference_verified": false,
+  "server_deployment_performed": false
+}

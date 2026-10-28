@@ -1,0 +1,20 @@
+# Local owner login/smoke only; never changes TMS or a server deployment.
+services:
+  sdk-netguard:
+    container_name: claude-sdk-local-netguard
+    ports: ["127.0.0.1:${LOCAL_SDK_PORT:-18080}:8080"]
+  sdk-egress-guard:
+    container_name: claude-sdk-local-egress-guard
+  sdk-egress:
+    container_name: claude-sdk-local-egress
+  claude-sdk-host:
+    container_name: claude-sdk-local-host
+networks:
+  sdk_clients: {name: claude_sdk_local_clients}
+  sdk_tools: {name: claude_sdk_local_tools}
+  sdk_proxy: {name: claude_sdk_local_proxy}
+  sdk_upstream: {name: claude_sdk_local_upstream}
+volumes:
+  claude-auth: {name: claude_sdk_local_auth}
+  claude-journal: {name: claude_sdk_local_journal}
+  claude-network-state: {name: claude_sdk_local_network_state}

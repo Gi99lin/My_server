@@ -46,5 +46,7 @@
     }
   },
   "idempotency_key_file": "/run/secrets/idempotency.key",
-  "network_ready_file": "/run/netguard/ready"
+  "network_ready_file": "/run/netguard/ready",
+  "max_agent_tokens": 10000000,
+  "max_agent_seconds": 14400
 }

@@ -6,7 +6,7 @@ source: owner approved implementation with Antigravity/Gemini 3.8 on 2026-10-27 
 entry_points: /v1/chat/completions, /v1/completions, /v1/agent-sessions
 related: []
 code_paths: claude-sdk-host
-updated: 2026-10-27
+updated: 2026-10-28
 ---
 
 # Personal Claude SDK sessions and completions
@@ -39,7 +39,7 @@ The owner connects personally used applications to one private Claude Agent SDK 
 
 ## Alternative flows
 
-- Repair first runs the case through execution, then invokes authoring if the case passes. This is planned TMS behavior; the host supplies the same two session types.
+- Repair first runs the case through execution, then invokes authoring if the case passes. TMS now implements this composition; the host supplies the same two session types. Browser and rewrite share the repair job budget, while a product failure prevents rewriting.
 - Reconnecting to an agent event stream replays unacknowledged accounting without rerunning tools. Text chunks are live-only.
 - A repeated start request with the same application request identifier returns the original session; a changed request under that identifier returns 409.
 

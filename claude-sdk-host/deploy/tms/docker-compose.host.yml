@@ -1,0 +1,56 @@
+# Apply explicitly AFTER the final TMS acceptance and a separate deployment command.
+# Use with TMS docker-compose.release.yml as the FIRST -f file. Not an automatic switch.
+x-host-env: &host-env
+  LLM_BACKEND: ${TMS_LLM_BACKEND:?Set current backend explicitly; switch to claude-host only after acceptance}
+  LLM_SDK_ALLOWED_USERS: ${TMS_HOST_ALLOWED_USERS:?Set personal owner UUID or email}
+  LLM_HOST_URL: http://claude-sdk-host:8080
+  LLM_HOST_MODEL: claude-personal-default
+  LLM_HOST_APPLICATION_ID: tms
+  LLM_HOST_PROVIDER_ID: tms
+  LLM_HOST_TOKEN_FILE: /run/claude-host/tms-app.token
+  LLM_HOST_CREDENTIAL_TOKEN_FILE: /run/claude-host/tms-credentials.token
+  TMS_AGENT_TMS_URL: http://10.253.240.20:8000
+services:
+  backend:
+    environment: *host-env
+    volumes:
+      - ${TMS_HOST_SECRET_DIR:?Operator directory outside Git}/apps/tms-app.token:/run/claude-host/tms-app.token:ro
+      - ${TMS_HOST_SECRET_DIR:?Operator directory outside Git}/providers/tms-credentials.token:/run/claude-host/tms-credentials.token:ro
+    networks:
+      default: {}
+      sdk_clients: {ipv4_address: 10.253.240.3}
+      sdk_tools: {ipv4_address: 10.253.240.20}
+  worker:
+    environment: *host-env
+    volumes:
+      - ${TMS_HOST_SECRET_DIR:?Operator directory outside Git}/apps/tms-app.token:/run/claude-host/tms-app.token:ro
+    networks:
+      default: {}
+      sdk_clients: {ipv4_address: 10.253.240.4}
+  testcase-tunnel:
+    networks:
+      default: {}
+      sdk_tools: {ipv4_address: 10.253.240.22}
+  sdk-credentials:
+    image: caddy:2-alpine
+    user: "1000:1000"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      XDG_CONFIG_HOME: /tmp/config
+      XDG_DATA_HOME: /tmp/data
+    volumes:
+      - ${TMS_HOST_CADDYFILE:?Absolute path to deploy/tms/Caddyfile}:/etc/caddy/Caddyfile:ro
+      - ${TMS_HOST_TLS_DIR:?TLS files outside Git}/server.crt:/run/tls/server.crt:ro
+      - ${TMS_HOST_TLS_DIR:?TLS files outside Git}/server.key:/run/tls/server.key:ro
+    tmpfs: [/tmp:size=16m,mode=1777]
+    networks:
+      default: {}
+      sdk_tools: {ipv4_address: 10.253.240.21}
+    depends_on:
+      backend: {condition: service_healthy}
+networks:
+  sdk_clients: {external: true, name: claude_sdk_clients}
+  sdk_tools: {external: true, name: claude_sdk_tools}

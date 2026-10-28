@@ -2,7 +2,7 @@
 
 Private executor for one owner's applications: official Claude Agent SDK, local Playwright Chromium and a small completion API. TMS keeps business state, permanent credentials and deterministic test execution. The executor owns the SDK session, browser and temporary session secrets.
 
-Requirements and acceptance status: [feature documentation](../docs/features/INDEX.md), [approved design](../docs/superpowers/specs/2026-10-27-claude-sdk-host-design.md), [implementation ledger](../docs/plans/2026-10-27-sdk-host-status.md). Public requests and limitations: [API contract](API.md).
+Requirements and acceptance status: [feature documentation](../docs/features/INDEX.md), [approved design](../docs/superpowers/specs/2026-10-27-claude-sdk-host-design.md), [implementation ledger](../docs/plans/2026-10-27-sdk-host-status.md). Public requests and limitations: [API contract](API.md). Current TMS preparation, inactive override, local login and rollback: [cutover guide](CUTOVER.md).
 
 ## Stack
 
@@ -89,3 +89,8 @@ networks:
 ```
 
 Use the same port range in TMS `STAND_TUNNEL_PORT_RANGE`, the host provider registry and the guard's internal port set. The guard accepts explicit numeric ports/ranges; it never exempts the entire Docker/RFC1918 address space. A saved `http://localhost:3000` stand is routed to the granted Docker relay port while its browser origin stays unchanged. This attachment is documented setup, not a production change performed by this task.
+
+
+## Current TMS readiness
+
+The 2026-10-28 preparation includes current repair mode, its borrowed author-job lease, shared browser/rewrite budgets and explicit cancellation cleanup. Start with [CUTOVER.md](CUTOVER.md); the reviewed source revision and scoped checks are recorded in [compatibility.json](deploy/tms/compatibility.json). The configuration overlay is inactive until an operator supplies the explicit backend value and runs a separately authorized deployment. A local official-login profile and two-turn live smoke are available without touching the TMS acceptance stack.

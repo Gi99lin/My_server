@@ -1,0 +1,17 @@
+{
+    auto_https off
+    admin off
+    log default {
+        output discard
+    }
+}
+:8443 {
+    tls /run/tls/server.crt /run/tls/server.key
+    @credentials path /api/v1/internal/claude-host/credentials /api/v1/internal/claude-host/credentials/*
+    handle @credentials {
+        reverse_proxy backend:8000
+    }
+    handle {
+        respond 404
+    }
+}
