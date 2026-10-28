@@ -54,7 +54,12 @@ def main():
                     if "error" in body:
                         raise ValueError("live_stream_failed")
                     usage = body.get("usage") or usage
-                    text += "".join(choice.get("delta", {}).get("content", "") for choice in body.get("choices", []))
+                    for choice in body.get("choices", []):
+                        content = choice.get("delta", {}).get("content")
+                        if content is not None:
+                            if not isinstance(content, str):
+                                raise ValueError("invalid_live_text_delta")
+                            text += content
                 if not done:
                     raise ValueError("live_stream_incomplete")
         if text.strip() != "LOCAL_SMOKE_OK" or not usage or usage["total_tokens"] <= 0:
