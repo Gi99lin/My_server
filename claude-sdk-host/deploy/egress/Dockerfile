@@ -10,7 +10,7 @@ RUN apk add --no-cache python3 netcat-openbsd ca-certificates
 
 COPY deploy/egress/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY deploy/egress/validate_config.py /usr/local/lib/validate_config.py
-RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN chmod 755 /usr/local/bin/entrypoint.sh && chmod 644 /usr/local/lib/validate_config.py
 
 EXPOSE 8080
 
