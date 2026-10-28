@@ -20,3 +20,18 @@ Review of pinned v2.11.5 source showed its FIFO marker does not cover a SOCKS fi
 Local fake SOCKS acceptance passed: healthy primary; primary TCP listener alive but CONNECT rejected -> reserve (2 checks); primary container stopped -> reserve; both chains unavailable -> failure plus IPv4/metadata/DNS direct denial; recovered primary selected again (5 checks). A POST whose payload reached the primary and whose stream was dropped did not reach the reserve; its application-request counter remained unchanged. Nine unsafe configuration variants were rejected without printing a URL/credential. Both real user-provided parent auth handshakes passed, with operational files written outside Git via non-echoed stdin; no supplied credential is in source or process arguments. No paid model call was made.
 
 Focused independent read-only review found no high-confidence P1/P2 issue in normalization, secret suppression, endpoint allowlisting or request replay. Actual model/login test remains pending the owner's official interactive login; no server operation was performed.
+
+## Explicit both-parent outage on the real local contour
+
+At the owner's request, verified the current four-service local deployment with both configured parent IPs/ports temporarily rejected in the egress namespace **before** established-connection acceptance. The added counter observed actual packets. No remote proxy or server was changed.
+
+Observed assertions:
+- Explicit HTTP CONNECT through the forwarder fails when both parents are blocked.
+- Direct TCP IPv4/IPv6, metadata, TCP DNS, Docker DNS, DoT and direct access to the parent endpoints fail from the application namespace.
+- UDP DNS, QUIC-port and other UDP sends are synchronously denied, rather than being treated as blocked merely because no reply arrived.
+- A child worker with a scrubbed environment and no proxy variables cannot bypass the policy.
+- Real sandboxed Chromium fails both with its configured proxy and with all proxy environment removed/direct connection attempted.
+- The forwarder's own uplink cannot connect directly to an arbitrary Internet destination.
+- Internal loopback API remains reachable; losing both parents does not shut down allowed internal traffic.
+
+The temporary block was removed in `finally`, probe files were removed from the container, and a subsequent proxied HTTPS public GET succeeded. No paid model request was made. The implementation required no additional code change: both host and forwarder namespaces already enforce default-drop independently of proxy availability.
