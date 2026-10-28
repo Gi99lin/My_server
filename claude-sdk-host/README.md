@@ -110,3 +110,6 @@ The configured proxy probes reach `api.anthropic.com:443` through each proxy wit
 ## Server publication
 
 `docker-compose.server.yml` is an explicit deployment override. It publishes only `127.0.0.1:18090` (configurable with `SDK_API_PORT`) and adds a controlled access bridge; the shared namespace still rejects direct external egress. Its API source prefix covers the dedicated client/access subnets rather than all IPv4. Docker application backends join `claude_sdk_clients` and use `http://claude-sdk-host:8080/v1`; host-side backends use the loopback publication. Keep application tokens in private files. Do not expose this endpoint through public ingress by default.
+
+
+Server endpoint, official login, application token-file examples and deployment receipt: [SERVER.md](SERVER.md).
