@@ -105,3 +105,8 @@ Input retains the narrow legacy JSON format for compatibility. Startup validates
 Connection/TLS tunnel setup may switch parents before application bytes are relayed. A broken established stream cannot migrate; failover does not recreate an SDK session, replay a model query or repeat an agent action. Provider HTTP errors are not interpreted as permission to replay a request. If both parents fail, the forwarder returns failure and namespace policy still blocks direct egress. Healthy internal Docker traffic is unaffected.
 
 The configured proxy probes reach `api.anthropic.com:443` through each proxy without a model request or TLS/application payload. GOST logs are suppressed, and no credential appears in an environment example, process argument or diagnostic output. Existing auth/model accounting stays in the executor.
+
+
+## Server publication
+
+`docker-compose.server.yml` is an explicit deployment override. It publishes only `127.0.0.1:18090` (configurable with `SDK_API_PORT`) and adds a controlled access bridge; the shared namespace still rejects direct external egress. Its API source prefix covers the dedicated client/access subnets rather than all IPv4. Docker application backends join `claude_sdk_clients` and use `http://claude-sdk-host:8080/v1`; host-side backends use the loopback publication. Keep application tokens in private files. Do not expose this endpoint through public ingress by default.

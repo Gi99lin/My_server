@@ -1,0 +1,19 @@
+# Explicit server deployment; API publication is host-loopback only.
+# The access bridge enables Docker port publication; egress is still enforced
+# by the shared namespace's default-drop nftables policy.
+services:
+  sdk-netguard:
+    ports: ["127.0.0.1:${SDK_API_PORT:-18090}:8080"]
+    environment:
+      CLIENTS_SUBNET: 10.253.240.0/23
+    networks:
+      sdk_access:
+        ipv4_address: 10.253.241.2
+networks:
+  sdk_access:
+    name: claude_sdk_access
+    internal: false
+    ipam:
+      config:
+        - subnet: 10.253.241.0/28
+          gateway: 10.253.241.1
