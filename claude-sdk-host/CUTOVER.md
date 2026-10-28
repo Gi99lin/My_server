@@ -68,3 +68,12 @@ Wait for active TMS model jobs to finish. Change `TMS_LLM_BACKEND` to `claude-ho
 ## Rollback
 
 Restore the previously recorded `TMS_LLM_BACKEND` value and recreate backend/worker with the same base/override files after active jobs finish or are explicitly canceled. Keep host auth, journal and TMS results/repository. Never automatically replay an interrupted model query and never delete volumes to roll back routing. This integration introduces no new database migration; canonical TMS migrations still follow its normal reviewed release process.
+
+
+## Two-parent local proxy operation
+
+The ordered failover input is `deploy/egress/gost.failover.example.json`. Runtime uses pinned GOST3.3.2 native chain-group health checks; keep both parent IPs/ports in the egress allowlist. Auth credentials remain in the operator directory, not `.env`, Git or process arguments. The private local environment can be passed to `deploy/scripts/local-login.sh /absolute/operator/local.env` for the official interactive subscription flow.
+
+The local overlay includes a dedicated access bridge because Docker does not publish an internal-only namespace's port. The bridge does not alter the default-drop egress firewall. Host publication remains exclusively `127.0.0.1:18080`; API authentication is still required. The local-only inbound API CIDR is broad to support Docker Desktop port forwarding, while production's client subnet restriction is unchanged. Direct IPv4/IPv6/metadata/DNS rejection was rechecked after adding the bridge.
+
+Failover was exercised with mock parents and with real provided parents by blocking only the primary in the local namespace. Established-stream failure is not automatic application replay. No server package, TMS routing or remote proxy service was changed.

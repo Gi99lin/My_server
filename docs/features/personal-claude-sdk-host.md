@@ -46,6 +46,7 @@ The owner connects personally used applications to one private Claude Agent SDK 
 ## Validation and business rules
 
 - Every connection outside registered attached Docker peers goes through the configured proxy. Turning off proxy variables or losing the proxy never permits direct external access.
+- Two identically configured upstream proxies may form an ordered primary/reserve group. Failed connection establishment selects the reserve; an unavailable primary is excluded temporarily and becomes eligible again after a cooldown. If both fail, external requests fail closed. Established streams cannot migrate; model queries and agent actions are never replayed automatically by failover.
 - SDK and browser external traffic share the executor's enforced proxy boundary; registered internal stand/tunnel traffic remains direct.
 - A tunneled stand keeps its saved browser origin, including a localhost origin. Redemption supplies only its bound tunnel port; the operator chooses the registered Docker relay and allowed port range. Missing or changed tunnel mapping fails closed before the browser starts. External resources continue through the mandatory proxy.
 - Credential leases are single-use, bound to the application/job/attempt and exact stand origin, and must be redeemed within 60 seconds. Values remain only in trusted session-tool memory; they are never placed in model messages or the CLI environment.

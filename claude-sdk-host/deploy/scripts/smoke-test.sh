@@ -79,6 +79,10 @@ HOST_SECRETS_DIR="$MOCK_SECRETS_DIR" EGRESS_UPSTREAM_IP=192.0.2.10 \
 
 echo "  [OK] docker compose config passed with isolated mock secrets directory."
 
+# Validate both supported operator input shapes against their exact parent allowlist.
+UPSTREAM_IPS=10.253.240.50 UPSTREAM_PORTS=1080 python3 deploy/egress/validate_config.py deploy/egress/gost.example.json
+UPSTREAM_IPS=192.0.2.10,192.0.2.11 UPSTREAM_PORTS=1080 python3 deploy/egress/validate_config.py deploy/egress/gost.failover.example.json
+
 # 5. Verify Dockerfile layout
 echo "[5/5] Verifying Dockerfile layout..."
 [ -f Dockerfile ] && echo "  [OK] claude-sdk-host/Dockerfile found."

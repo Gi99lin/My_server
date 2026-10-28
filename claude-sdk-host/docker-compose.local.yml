@@ -3,6 +3,13 @@ services:
   sdk-netguard:
     container_name: claude-sdk-local-netguard
     ports: ["127.0.0.1:${LOCAL_SDK_PORT:-18080}:8080"]
+    # Docker does not publish ports on an internal-only namespace. The local
+    # access bridge supplies publication; the same nftables output policy stays
+    # default-drop. API is bound only to host loopback and still token protected.
+    environment:
+      CLIENTS_SUBNET: 0.0.0.0/0
+    networks:
+      sdk_local_access: {}
   sdk-egress-guard:
     container_name: claude-sdk-local-egress-guard
   sdk-egress:
@@ -10,6 +17,9 @@ services:
   claude-sdk-host:
     container_name: claude-sdk-local-host
 networks:
+  sdk_local_access:
+    name: claude_sdk_local_access
+    internal: false
   sdk_clients: {name: claude_sdk_local_clients}
   sdk_tools: {name: claude_sdk_local_tools}
   sdk_proxy: {name: claude_sdk_local_proxy}

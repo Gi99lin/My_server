@@ -38,10 +38,10 @@ exec "$CLI_PATH" auth login --claudeai
 
 if docker compose ps --services --filter "status=running" 2>/dev/null | grep -q "^claude-sdk-host$"; then
     echo "Attaching to running claude-sdk-host service in guarded namespace..."
-    docker compose exec -it -u 1000:1000 claude-sdk-host bash -c "$LOGIN_CMD"
+    docker compose exec -it -u 1000:1000 -e DISABLE_AUTOUPDATER=1 -e CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 claude-sdk-host bash -c "$LOGIN_CMD"
 else
     echo "Launching disposable maintenance container in guarded SDK namespace..."
-    docker compose run --rm -it -u 1000:1000 --entrypoint bash claude-sdk-host -c "$LOGIN_CMD"
+    docker compose run --rm -it -u 1000:1000 -e DISABLE_AUTOUPDATER=1 -e CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 --entrypoint bash claude-sdk-host -c "$LOGIN_CMD"
 fi
 
 echo ""

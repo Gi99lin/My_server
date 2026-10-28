@@ -1,0 +1,10 @@
+{
+  "Debug": false,
+  "Retries": 2,
+  "ServeNodes": [
+    "http://:8080"
+  ],
+  "ChainNodes": [
+    "socks5://placeholder-user:placeholder-password@192.0.2.10:1080?ip=192.0.2.10:1080,192.0.2.11:1080&strategy=fifo&max_fails=1&fail_timeout=30s"
+  ]
+}

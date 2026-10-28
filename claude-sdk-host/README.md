@@ -6,7 +6,7 @@ Requirements and acceptance status: [feature documentation](../docs/features/IND
 
 ## Stack
 
-Python 3.12+, FastAPI, SQLite, official `claude-agent-sdk`, Playwright/Chromium. One application container shares a guarded network namespace. GOST shares a second guarded namespace and forwards through the operator's mandatory SOCKS5/HTTP(S) parent. Only the two small guards have `NET_ADMIN`; application and forwarder drop all capabilities. The application runs as UID 1000 with a read-only root filesystem, private IPC and the official Playwright seccomp profile plus the documented `chroot` allowance for its user-namespace sandbox.
+Python 3.12+, FastAPI, SQLite, official `claude-agent-sdk`, Playwright/Chromium. One application container shares a guarded network namespace. Pinned GOST 3.3.2 shares a second guarded namespace and forwards through the operator's mandatory SOCKS5/HTTP(S) parent or ordered primary/reserve group. Only the two small guards have `NET_ADMIN`; application and forwarder drop all capabilities. The application runs as UID 1000 with a read-only root filesystem, private IPC and the official Playwright seccomp profile plus the documented `chroot` allowance for its user-namespace sandbox.
 
 Four dedicated Docker networks separate callers, registered internal peers, the forwarder, and its uplink. Default subnets are four `/28` ranges inside `10.253.240.0/24`; adjust them before deployment if they overlap existing routes. Static addresses and `/etc/hosts` entries are intentional: runtime Docker DNS, direct external TCP, IPv6 and UDP are blocked. External name resolution belongs to the upstream proxy. Do not attach the application to an unrestricted network.
 
@@ -94,3 +94,14 @@ Use the same port range in TMS `STAND_TUNNEL_PORT_RANGE`, the host provider regi
 ## Current TMS readiness
 
 The 2026-10-28 preparation includes current repair mode, its borrowed author-job lease, shared browser/rewrite budgets and explicit cancellation cleanup. Start with [CUTOVER.md](CUTOVER.md); the reviewed source revision and scoped checks are recorded in [compatibility.json](deploy/tms/compatibility.json). The configuration overlay is inactive until an operator supplies the explicit backend value and runs a separately authorized deployment. A local official-login profile and two-turn live smoke are available without touching the TMS acceptance stack.
+
+
+## Parent proxy failover
+
+Use `deploy/egress/gost.failover.example.json` as the operator input for two identically configured parents, keeping credentials outside Git. Set `EGRESS_UPSTREAM_IPS` to both numeric addresses and `EGRESS_UPSTREAM_PORTS` to their port set; these must exactly match the input. The singular variables remain supported for one parent.
+
+Input retains the narrow legacy JSON format for compatibility. Startup validates it and writes a private mode0600 GOST 3 runtime config in tmpfs. It creates two independent single-hop chains with FIFO preference, bounded retries and native whole-chain TCP probes every 5 seconds (3-second probe timeout). The selector excludes failed chains and restores healthy ones; passive failure cooldown is 30 seconds. An active successful probe can restore a recovered primary earlier. Do not add two `ChainNodes`: that would create consecutive proxy hops rather than reserves.
+
+Connection/TLS tunnel setup may switch parents before application bytes are relayed. A broken established stream cannot migrate; failover does not recreate an SDK session, replay a model query or repeat an agent action. Provider HTTP errors are not interpreted as permission to replay a request. If both parents fail, the forwarder returns failure and namespace policy still blocks direct egress. Healthy internal Docker traffic is unaffected.
+
+The configured proxy probes reach `api.anthropic.com:443` through each proxy without a model request or TLS/application payload. GOST logs are suppressed, and no credential appears in an environment example, process argument or diagnostic output. Existing auth/model accounting stays in the executor.

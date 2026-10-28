@@ -153,8 +153,8 @@ services:
       ROLE: egress
       PROXY_SUBNET: ${SDK_PROXY_SUBNET:-10.253.240.32/28}
       LISTEN_PORT: 8080
-      UPSTREAM_IPS: ${EGRESS_UPSTREAM_IP:?Set numeric upstream proxy IP}
-      UPSTREAM_PORTS: ${EGRESS_UPSTREAM_PORT:-1080}
+      UPSTREAM_IPS: ${EGRESS_UPSTREAM_IPS:-${EGRESS_UPSTREAM_IP:?Set numeric upstream proxy IP(s)}}
+      UPSTREAM_PORTS: ${EGRESS_UPSTREAM_PORTS:-${EGRESS_UPSTREAM_PORT:-1080}}
     healthcheck:
       test: ["CMD", "nft", "list", "table", "inet", "netguard"]
       interval: 5s
@@ -188,6 +188,8 @@ services:
       - /tmp:size=16M,mode=1777
     environment:
       CONFIG_FILE: "/run/secrets/gost-config.json"
+      UPSTREAM_IPS: ${EGRESS_UPSTREAM_IPS:-${EGRESS_UPSTREAM_IP:?Set numeric upstream proxy IP(s)}}
+      UPSTREAM_PORTS: ${EGRESS_UPSTREAM_PORTS:-${EGRESS_UPSTREAM_PORT:-1080}}
     healthcheck:
       test: ["CMD-SHELL", "nc -z 127.0.0.1 8080 || exit 1"]
       interval: 5s

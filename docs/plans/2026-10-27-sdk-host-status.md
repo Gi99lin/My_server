@@ -105,3 +105,16 @@ Host artifacts now include an explicit inactive TMS release override, a private 
 No live model request, real owner login, production switch or server command was performed. A ready Docker-reachable proxy or opaque operator configuration is still needed before the offered real local login/test. Real subscription, proxy-exit and production tunnel evidence remain explicitly unverified. Final preparation matrix and report are in the TMS worktree at `docs/plans/tracks/2026-10-28-sdk-host-cutover.md` and its report.
 
 Focused independent Sol review of TMS `cb527ea35b31` found no high-confidence P1/P2 defect in the changed authorization, lease, replay, shared accounting and cancellation paths. The preparation matrix is closed 8/8; this does not certify live model/proxy/tunnel operation. The only new long-running local resource was isolated Postgres5649, removed after verification; the owner's existing acceptance services were left running.
+
+
+## 2026-10-28 two-parent failover and local owner-login contour
+
+User supplied two identical SOCKS5 parents and requested rotation on failure. Both protocol and actual username/password authentication handshakes passed; values were accepted on a non-echoed input channel and written only to a private operator directory outside Git. The SDK's proxy URL stays the internal forwarder, so proxy credentials never enter its environment.
+
+Runtime now pins official GOST3.3.2. A strict normalizer preserves the prior narrow operator input while generating a fixed v3 two-chain FIFO/probe configuration in mode0600 tmpfs. Only registered parent IP/port sets are allowed by the egress namespace; no bypass/direct route or arbitrary runtime options can be supplied. Modern whole-chain probes address the old v2 target-CONNECT failure gap without a custom proxy fork.
+
+Mock acceptance passed primary/reserve selection for TCP failure and CONNECT failure, both-down failure with no direct egress, recovery, and no replay of an accepted POST when the stream drops. Nine unsafe input variants were rejected. Independent read-only review found no high-confidence P1/P2 issue. Actual HTTPS exits through both real parents passed; primary failure was injected only in the local namespace and the test rule was removed. No real proxy was stopped or reconfigured remotely.
+
+The local owner contour is running on loopback18080 with separate retained auth/journal volumes and GOST-only parent access. Docker Desktop required a local-only access bridge for port publication; the unchanged default-drop output rules were rechecked afterward. Readiness correctly requires official owner login. No paid model query or owner sign-in has happened yet, and no production server/TMS switch was performed.
+
+Credential scan passed for every task change. It separately found pre-existing unchanged credential-bearing files at `marzneshin/marznode/kz2/docker-compose.yml` and `marzneshin/marznode/us/docker-compose.yml`; these are not part of the SDK edits and were not modified. Those legacy values must not be copied into reports. Operational config and OAuth state are excluded from Git.
