@@ -18,7 +18,13 @@
     "independent_contract_passed": 6,
     "repair_seam_passed": 39
   },
-  "activation_performed": false,
-  "live_inference_verified": false,
-  "server_deployment_performed": false
+  "activation_performed": true,
+  "live_inference_verified": true,
+  "server_deployment_performed": true,
+  "activated_on": "2026-10-29",
+  "tms_deployed_revision": "657025a879701bbaa10d283581af6658b0c0fd23",
+  "live_tms_completion_usage_tokens": 615,
+  "live_stand_execution_verified": false,
+  "live_authoring_verified": false,
+  "live_repair_verified": false
 }

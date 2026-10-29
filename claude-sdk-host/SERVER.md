@@ -1,6 +1,6 @@
-# Server deployment — 2026-10-28
+# Server deployment — 2026-10-29
 
-The SDK host is deployed on SSH alias `gigglin-server`, release code `32f19d3` (Linux x86_64). Source is pushed on `codex/claude-sdk-host`; TMS integration is pushed separately on `codex/claude-host-integration`. TMS backend/worker still use `api`: this deployment does not switch them.
+The SDK host is deployed on SSH alias `gigglin-server`, release code `32f19d3` (Linux x86_64). Source is pushed on `codex/claude-sdk-host`; TMS integration is pushed separately on `codex/claude-host-integration`. The owner completed official login. TMS backend and worker now use `claude-host`, restricted to the sole active owner's UUID, with image `ai-testcase-generator-backend:claude-host-657025a8`.
 
 ## Official personal login
 
@@ -12,7 +12,7 @@ ssh -t gigglin-server /home/gigglin/.config/claude-sdk-host/login.sh
 
 The helper opens the bundled official `auth login --claudeai` inside the guarded container. Open the displayed official link and complete the interactive flow in that terminal. Do not send OAuth codes/tokens in chat. Account credentials stay in Docker volume `claude_sdk_auth`; never delete it during restart/update. No API billing credential is used as a fallback.
 
-Until login, `/health/ready` returns503 `reauthentication_required`, while `/health/live` stays healthy. A paid model smoke is intentionally pending owner login. After login, the two-turn smoke can be run from the deployed release with the registered app token file; it prints status/usage only.
+Without login, `/health/ready` returns503 `reauthentication_required`, while `/health/live` stays healthy. After the owner's login, real sync and SSE completion probes passed (616 and 619 tokens). A separate request through TMS's actual owner client passed and persisted a `claude-host` usage record of 615 tokens. These probes print markers/status/counters only.
 
 ## API addresses
 
@@ -53,9 +53,17 @@ For a Compose application, preserve its existing networks and add external `clau
 
 ## TMS-specific connection
 
-TMS needs its explicit `claude-host` adapter from the pushed integration branch; changing only its generic OpenAI base URL is insufficient. The prepared override is `deploy/tms/docker-compose.host.yml`, and the workflow is [CUTOVER.md](CUTOVER.md). It connects MCP, private HTTPS credential provider and stand tunnel and preserves the existing built-in deterministic runner.
+TMS uses its explicit `claude-host` adapter from commit `657025a879701bbaa10d283581af6658b0c0fd23`; changing only its generic OpenAI base URL is insufficient. The server's `testcase-*` service names use `deploy/tms/docker-compose.testcase-host.yml` and `Caddyfile.testcase` as the public template. The generic release template remains `docker-compose.host.yml`. Build the credential gateway with `Dockerfile.credentials`: it removes the upstream binary's file capability, allowing non-root execution with all capabilities dropped on port8443.
 
-Pre-provisioned server files for that later switch are under the same operator secret directory: `apps/tms-app.token`, `providers/tms-credentials.token`, and a provider CA certificate. The TLS server certificate/key are in `/home/gigglin/.config/claude-sdk-host/tms-provider-tls`, outside Git. No gateway or TMS backend switch was activated by the SDK-only deployment.
+Application/provider tokens and the trusted provider CA remain in the operator secret directory. The TLS server certificate/key are in `/home/gigglin/.config/claude-sdk-host/tms-provider-tls`, outside Git. SDK-to-provider certificate verification passed; invalid credential leases return403, unrelated gateway paths return404, and unauthenticated execution MCP returns401. The gateway has no published port.
+
+The actual private overlay is `/home/gigglin/.config/claude-sdk-host/tms-active.override.json`. Deployment `.env` selects it with `COMPOSE_FILE`, so normal Compose operations in `/home/gigglin/My_server/ai-testcase-generator` retain the switch. Existing environment, networks, uploads, repository and license mounts were preserved. The tunnel was attached live without restarting it; runner and tunnel retain their original containers. No schema migration was introduced or applied. **Future TMS releases must contain the host integration and update the overlay's backend/worker image pin.**
+
+Real completion is verified. Full browser execution, authoring and repair against a user stand still require a pilot job; protected MCP/TLS connectivity and the earlier integration tests do not substitute for that evidence.
+
+## TMS routing rollback
+
+The original Compose/environment and image manifest are saved privately in `/home/gigglin/.config/claude-sdk-host/tms-before-host`. After draining active model jobs, restore its `.env` to the TMS deployment directory, then run `docker compose up -d --no-deps testcase-backend testcase-worker` there. This restores the original API images/routing. Preserve the Claude auth/journal and all TMS volumes/results; do not delete volumes or automatically replay interrupted model calls.
 
 ## Operations and acceptance
 

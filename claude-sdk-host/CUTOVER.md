@@ -1,6 +1,6 @@
 # TMS cutover preparation — 2026-10-28
 
-This package prepares a future explicit switch. It does not deploy, change the active TMS backend or consume model turns by itself. Keep the owner's current acceptance stack running independently.
+The templates below prepare an explicit switch and do not activate it by themselves. The owner subsequently authorized deployment and completed login: on 2026-10-29 the server backend/worker were switched to `claude-host` using TMS commit `657025a8`. Real TMS completion and persisted usage, private provider TLS/guards and MCP connectivity passed. Full stand execution/authoring/repair pilot remains pending. Current deployed paths and rollback are recorded in [SERVER.md](SERVER.md).
 
 ## Coverage of current TMS
 
@@ -29,7 +29,7 @@ A repair shares its token/time budget across waiting, browser pass, rewrite and 
 
    This checks committed source/interface markers and the supplied default overlay bindings. It neither runs TMS nor proves live inference. It rejects the old canonical checkout so a misspelled/unsupported switch cannot silently keep using the API backend.
 3. Prepare independent application/provider tokens, host config and provider TLS files **outside Git**. Set `TMS_HOST_SECRET_DIR` to the same operator directory as host `HOST_SECRETS_DIR`. The override mounts the exact same `apps/tms-app.token` and `providers/tms-credentials.token` files into TMS; no copying of token values is needed. Never send values in chat or command arguments.
-4. Use `deploy/tms/docker-compose.host.yml` as an explicit override of TMS `docker-compose.release.yml`. Copy `deploy/tms/cutover.env.example` outside Git and initially set `TMS_LLM_BACKEND` to the currently active backend. This override preserves the base environment and has no published credential port. `docker compose config` is read-only; `up` changes services.
+4. Use `deploy/tms/docker-compose.host.yml` as an explicit override of TMS `docker-compose.release.yml`. For the server's `testcase-*` deployment use `docker-compose.testcase-host.yml` with `Caddyfile.testcase` and a reviewed backend image instead. Copy `deploy/tms/cutover.env.example` outside Git and initially set `TMS_LLM_BACKEND` to the currently active backend. Set `TMS_HOST_DEPLOY_DIR` to the absolute `deploy/tms` directory and build `sdk-credentials` before starting it. The derived gateway image removes an unnecessary file capability so it runs with `cap_drop: ALL`; no extra capability is granted. Preserve all existing base networks. The override has no published credential port. `docker compose config` is read-only; `up` changes services.
 5. Provider TLS certificate must validate `10.253.240.21`; its trusted CA goes in host `providers/tms-credentials-ca.crt`. Mount server certificate/key at the TLS gateway. UID1000 must read those files, and the TMS backend/worker must read their token files. Keep directories private and verify access using the actual image UIDs.
 6. Match network/IP/port bindings to `config.example.json`: backend MCP `.20:8000`, provider TLS `.21:8443`, tunnel `.22:42000-42999`. If changing them, update registry, static mappings, firewall and override together. Host default authoring caps cover 240 minutes / 10 million tokens; execution budgets beyond configured host caps fail explicitly rather than being truncated.
 

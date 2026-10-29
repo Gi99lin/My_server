@@ -46,7 +46,7 @@ Feature documentation and coverage: [`docs/features/INDEX.md`](./docs/features/I
 The private personal Claude executor is implemented in [`claude-sdk-host/`](./claude-sdk-host/README.md).
 See its [API contract](./claude-sdk-host/API.md), [approved architecture](./docs/superpowers/specs/2026-10-27-claude-sdk-host-design.md),
 [prior-art review](./docs/superpowers/specs/2026-10-27-claude-sdk-prior-art.md) and
-[verification ledger](./docs/plans/2026-10-27-sdk-host-status.md). Production deployment and official owner login remain separate operations.
+[verification ledger](./docs/plans/2026-10-27-sdk-host-status.md). The owner authorized server deployment, completed official login, and TMS now uses the host; see the [deployment receipt](./claude-sdk-host/SERVER.md) for verification and rollback.
 
 ### OpenClaw (Multi-Agent System)
 Personal AI assistant framework with persistent memory, multi-agent orchestration, and Telegram bots (Dev Team, QA, FinAnalyst, etc.).

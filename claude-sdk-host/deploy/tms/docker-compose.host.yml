@@ -32,7 +32,10 @@ services:
       default: {}
       sdk_tools: {ipv4_address: 10.253.240.22}
   sdk-credentials:
-    image: caddy:2-alpine
+    image: claude-sdk-credentials:local
+    build:
+      context: ${TMS_HOST_DEPLOY_DIR:?Absolute path to host deploy/tms}
+      dockerfile: Dockerfile.credentials
     user: "1000:1000"
     restart: unless-stopped
     read_only: true

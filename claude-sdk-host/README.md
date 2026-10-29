@@ -93,7 +93,7 @@ Use the same port range in TMS `STAND_TUNNEL_PORT_RANGE`, the host provider regi
 
 ## Current TMS readiness
 
-The 2026-10-28 preparation includes current repair mode, its borrowed author-job lease, shared browser/rewrite budgets and explicit cancellation cleanup. Start with [CUTOVER.md](CUTOVER.md); the reviewed source revision and scoped checks are recorded in [compatibility.json](deploy/tms/compatibility.json). The configuration overlay is inactive until an operator supplies the explicit backend value and runs a separately authorized deployment. A local official-login profile and two-turn live smoke are available without touching the TMS acceptance stack.
+The integration includes current repair mode, its borrowed author-job lease, shared browser/rewrite budgets and explicit cancellation cleanup. Start with [CUTOVER.md](CUTOVER.md); the reviewed source revision and scoped checks are recorded in [compatibility.json](deploy/tms/compatibility.json). After explicit owner authorization and official login, the server TMS backend/worker were activated on 2026-10-29. Real owner completion and persisted usage passed; full live stand execution/authoring/repair remains a pilot check. Exact deployed paths, image pins and rollback are in [SERVER.md](SERVER.md). Templates require explicit operator values and do not activate another installation automatically.
 
 
 ## Parent proxy failover
