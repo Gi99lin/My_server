@@ -1,6 +1,8 @@
 # My HomeLab Server (`gigglin-pve`)
 
-Infrastructure-as-Code, Docker Compose stacks, router configurations, and backup tooling for a segmented **Proxmox VE 9.2** HomeLab behind an **OpenWrt 25.12.6** security/routing appliance (`AmneziaWG` + `sing-box` + `nftables`).
+Infrastructure-as-Code, Docker Compose stacks, OpenWrt router configurations, and backup tooling for a segmented **Proxmox VE 9.2** HomeLab behind an **OpenWrt 25.12.6** security/routing appliance (`AmneziaWG` + `sing-box` + `nftables`).
+
+> **For AI Agents**: Read [`AGENTS.md`](./AGENTS.md) for complete operational rules, inter-VLAN pinhole matrix, per-service deploy gotchas (`hrBot` dev/prod split, `omniroute`, `qa-lab`, VDI reverse tunnels), and Mac 3-tunnel client routing.
 
 ---
 
@@ -17,24 +19,26 @@ All workloads are isolated into **7 L3-segmented VLAN contours** on internal tru
 | **4. dev** | `140` | `10.10.40.10/24` (`VLAN 40`) | `gigglin-dev` (`dev.home.arpa`) | **All traffic** → `proxy-failover` (`212.*` → `194.*`, fail-closed) | `dmaic-studio` (`dmaic.gigglin.tech`), `dmaic-old` (`dmaic-old.gigglin.tech`), `hrbot_dev`, `github-runner` (`tms-ci-dind`), `actions-runner-dmaic.service` |
 | **5. agents** | `150` | `10.10.50.10/24` (`VLAN 50`) | `gigglin-agents` (`agents.home.arpa`) | **Strict single proxy** `proxy-kz` (`212.116.240.211`, **no rotation**, fail-closed) | `claude-sdk-host` (`:18090` + `tms-credentials` + `egress`/`netguard`), `hermes-tasks` |
 | **6. llm** | `160` | `10.10.60.10/24` (`VLAN 60`) | `gigglin-llm` (`http://omni.home.arpa`) | **Strict single proxy** `proxy-kz` (`212.116.240.211`, **no rotation**, fail-closed) | `omniroute` (`:20131` `/v1/*` API gateway + VPN-only `:20130` Dashboard) |
-| **7. corp** | `171`<br>`170` | `10.10.70.10/24`<br>`10.10.70.20/24` (`VLAN 70`) | `gigglin-corp-gw` (`corp-gw.home.arpa`)<br>`corp-vm` (`corp-win10.home.arpa`) | Direct ISP; zero access to internal VLANs | `corp-gw`: `guacamole` (`rdp.gigglin.tech`), `trueconf` (+ daily cron), VDI reverse-tunnel SSH endpoint.<br>`corp-win10`: native Windows 10 VM |
+| **7. corp** | `171`<br>`170` | `10.10.70.10/24`<br>`10.10.70.20/24` (`VLAN 70`) | `gigglin-corp-gw` (`corp-gw.home.arpa`)<br>`corp-vm` (`corp-win10.home.arpa`) | Direct ISP; zero access to internal VLANs | `corp-gw`: `guacamole` (`rdp.gigglin.tech`), `trueconf` (+ daily cron), VDI reverse-tunnel SSH endpoint (`18080–18090`).<br>`corp-win10`: native Windows 10 VM (`corp-socks`) |
 
 ---
 
 ## 🔒 Security & Routing Invariants
 
 1. **Single LLM Gateway (`omniroute`)**:
-   - Every internal service across `personal`, `apps`, `dev`, and `agents` calls LLMs exclusively through `http://10.10.60.10:20131/v1`.
+   - Every internal service across `personal`, `apps`, `dev`, and `agents` calls LLMs exclusively through `http://10.10.60.10:20131/v1` (with zero internal proxies inside `omniroute`'s `storage.sqlite`, since `VLAN 60` is routed at L3 through `proxy-kz`).
    - `gigglin-router` rejects direct DNS/TLS connections to external LLM providers from `VLAN 20/30/40` (and non-Anthropic providers from `VLAN 50`, preserving Claude OAuth for `claude-sdk-host`).
    - External clients access `https://omniroute.gigglin.tech/v1/*` via NPM forwarding strictly to port `20131` (`/` returns `404`; Admin UI `:20130` is reachable only over AmneziaWG VPN at `http://omni.home.arpa`).
-2. **Router-Enforced Fail-Closed Proxying**:
+2. **Router-Enforced Fail-Closed Proxying & Public DNS**:
    - Upstream proxy credentials exist in a single place: `/etc/sing-box/config.json` on `gigglin-router` (template in [`infra/openwrt-router/sing-box.config.example.json`](./infra/openwrt-router/sing-box.config.example.json)).
-   - `nftables` rules ([`infra/openwrt-router/20-contours-egress.nft`](./infra/openwrt-router/20-contours-egress.nft)) enforce strict fail-closed kill-switches and block direct WAN DNS/QUIC leaks.
+   - `dnsmasq` on `gigglin-router` uses public upstream DNS (`8.8.8.8`, `1.1.1.1`) with `noresolv=1` (never querying the ISP router), while `sing-box` resolves proxied traffic remotely over `proxy-kz`.
+   - Internal NAT hairpinning ([`infra/openwrt-router/20-hairpin-dnat.nft`](./infra/openwrt-router/20-hairpin-dnat.nft)) routes internal contour requests for `128.0.130.144:80/443` (`*.gigglin.tech`) directly to `10.10.10.10` (`edge` NPM) in `<1 ms`.
+   - Automated verification suite: [`infra/openwrt-router/test-contours.sh`](./infra/openwrt-router/test-contours.sh) (`ssh gigglin-pve /root/test-contours.sh`, 46 checks).
 3. **VPN-Only Admin Endpoints (Zero Port Numbers Required)**:
    - `https://pve.home.arpa` → Proxmox VE Web UI
    - `http://router.home.arpa` → OpenWrt LuCI
    - `http://npm.home.arpa` → Nginx Proxy Manager Admin UI (bound via isolated VIP `10.10.10.11`, unreachable from WAN)
-   - `http://omni.home.arpa` → OmniRoute Admin Dashboard
+   - `http://omni.home.arpa` → OmniRoute Admin Dashboard (`AUTH_COOKIE_SECURE=false` for HTTP VPN access)
 
 ---
 
@@ -50,16 +54,18 @@ All workloads are isolated into **7 L3-segmented VLAN contours** on internal tru
 
 ## 🤖 AI & Feature Documentation
 
+- Agent operational guide & post-migration reference: [`AGENTS.md`](./AGENTS.md).
 - Feature documentation and coverage: [`docs/features/INDEX.md`](./docs/features/INDEX.md).
-- Personal Claude SDK service architecture: [`docs/superpowers/specs/2026-10-27-claude-sdk-host-design.md`](./docs/superpowers/specs/2026-10-27-claude-sdk-prior-art.md) & [`claude-sdk-host/docker-compose.contours.yml`](./claude-sdk-host/docker-compose.contours.yml) (deployed in `agents`, `VM 150`).
-- Auto-deploy via [`watchtower/`](./watchtower): runs per contour VM, polling GHCR every 2 minutes for containers labeled `com.centurylinklabs.watchtower.enable=true`.
+- Personal Claude SDK service architecture: [`docs/superpowers/specs/2026-10-27-claude-sdk-host-design.md`](./docs/superpowers/specs/2026-10-27-claude-sdk-host-design.md) & [`claude-sdk-host/docker-compose.contours.yml`](./claude-sdk-host/docker-compose.contours.yml) (deployed in `agents`, `VM 150`).
+- Auto-deploy via [`watchtower/`](./watchtower): runs per contour VM (`edge`, `apps`, `dev`), polling GHCR every 2 minutes for containers labeled `com.centurylinklabs.watchtower.enable=true`.
 
 ---
 
 ## 📂 Repository Layout
 
+- `AGENTS.md` / `CLAUDE.md` — Comprehensive context, rules, and deploy reference for AI coding agents.
 - `infra/proxmox/` — Proxmox VE network trunk (`vmbr0`/`vmbr1`) and `vzdump` backup schedule.
-- `infra/openwrt-router/` — Sanitized OpenWrt `network`, `firewall`, `dhcp`, `nftables` kill-switch, WebRTC policy routing, and `sing-box` config template.
+- `infra/openwrt-router/` — Sanitized OpenWrt `network`, `firewall`, `dhcp`, `20-hairpin-dnat.nft`, `95-webrtc-dnat`, `99-singbox-route`, `sing-box.config.example.json`, and `test-contours.sh`.
 - `backup/` — Centralized Proxmox QGA+LVM Restic script (`pve-restic-backup.sh`) and Nextcloud HDD Restic script (`backup.sh`).
 - `claude-sdk-host/` — Contour network override for `claude-sdk-host` (`VM 150`).
 - `omniroute/` — Unified LLM API gateway (`VM 160`).

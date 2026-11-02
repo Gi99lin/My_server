@@ -453,3 +453,39 @@ config redirect
 	option dest_port '22'
 	option target 'DNAT'
 
+
+config rule
+	option name 'Hairpin-personal-to-edge-NPM'
+	option src 'personal'
+	option dest 'edge'
+	option dest_ip '10.10.10.10'
+	option proto 'tcp udp'
+	option dest_port '80 443'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Hairpin-apps-to-edge-NPM'
+	option src 'apps'
+	option dest 'edge'
+	option dest_ip '10.10.10.10'
+	option proto 'tcp udp'
+	option dest_port '80 443'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Hairpin-dev-to-edge-NPM'
+	option src 'dev'
+	option dest 'edge'
+	option dest_ip '10.10.10.10'
+	option proto 'tcp udp'
+	option dest_port '80 443'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Hairpin-agents-to-edge-NPM'
+	option src 'agents'
+	option dest 'edge'
+	option dest_ip '10.10.10.10'
+	option proto 'tcp udp'
+	option dest_port '80 443'
+	option target 'ACCEPT'

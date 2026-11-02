@@ -1,0 +1,6 @@
+#!/bin/sh
+[ "$INTERFACE" = "sb0" ] || exit 0
+if [ "$ACTION" = "add" ] || [ "$ACTION" = "up" ]; then
+  ip link set dev sb0 up
+  ip route replace default dev sb0 metric 100 table 100
+fi
