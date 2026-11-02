@@ -10,7 +10,7 @@ iface vmbr0 inet static
 	bridge-ports nic0
 	bridge-stp off
 	bridge-fd 0
-	post-up iptables -t nat -C PREROUTING -i vmbr0 -p tcp --dport 443 -j REDIRECT --to-ports 8006 2>/dev/null || iptables -t nat -A PREROUTING -i vmbr0 -p tcp --dport 443 -j REDIRECT --to-ports 8006
+	post-up iptables -t nat -C PREROUTING -d 192.168.1.12/32 -p tcp --dport 443 -j REDIRECT --to-ports 8006 2>/dev/null || iptables -t nat -A PREROUTING -d 192.168.1.12/32 -p tcp --dport 443 -j REDIRECT --to-ports 8006
 
 iface nic1 inet manual
 
