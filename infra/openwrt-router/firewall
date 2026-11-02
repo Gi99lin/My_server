@@ -1,0 +1,455 @@
+
+config defaults
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+	option synflood_protect '1'
+
+config zone 'wan'
+	option name 'wan'
+	list network 'wan'
+	list network 'wan6'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'DROP'
+	option masq '1'
+	option mtu_fix '1'
+
+config zone 'vpn'
+	option name 'vpn'
+	list network 'awg0'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+
+config zone 'sb'
+	option name 'sb'
+	list device 'sb0'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+
+config zone 'edge'
+	option name 'edge'
+	list network 'edge'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+
+config zone 'personal'
+	option name 'personal'
+	list network 'personal'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+
+config zone 'apps'
+	option name 'apps'
+	list network 'apps'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+
+config zone 'dev'
+	option name 'dev'
+	list network 'dev'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+
+config zone 'agents'
+	option name 'agents'
+	list network 'agents'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+
+config zone 'llm'
+	option name 'llm'
+	list network 'llm'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+
+config zone 'corp'
+	option name 'corp'
+	list network 'corp'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+
+config forwarding
+	option src 'edge'
+	option dest 'wan'
+
+config forwarding
+	option src 'corp'
+	option dest 'wan'
+
+config forwarding
+	option src 'personal'
+	option dest 'sb'
+
+config forwarding
+	option src 'apps'
+	option dest 'sb'
+
+config forwarding
+	option src 'dev'
+	option dest 'sb'
+
+config forwarding
+	option src 'agents'
+	option dest 'sb'
+
+config forwarding
+	option src 'llm'
+	option dest 'sb'
+
+config forwarding
+	option src 'vpn'
+	option dest 'edge'
+
+config forwarding
+	option src 'vpn'
+	option dest 'personal'
+
+config forwarding
+	option src 'vpn'
+	option dest 'apps'
+
+config forwarding
+	option src 'vpn'
+	option dest 'dev'
+
+config forwarding
+	option src 'vpn'
+	option dest 'agents'
+
+config forwarding
+	option src 'vpn'
+	option dest 'llm'
+
+config forwarding
+	option src 'vpn'
+	option dest 'corp'
+
+config rule
+	option name 'VPN-to-home-LAN-only'
+	option src 'vpn'
+	option dest 'wan'
+	option dest_ip '192.168.1.0/24'
+	option proto 'all'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Allow-DHCP-Renew'
+	option src 'wan'
+	option proto 'udp'
+	option dest_port '68'
+	option target 'ACCEPT'
+	option family 'ipv4'
+
+config rule
+	option name 'Allow-Ping-WAN'
+	option src 'wan'
+	option proto 'icmp'
+	option icmp_type 'echo-request'
+	option family 'ipv4'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Mgmt-SSH-LuCI-from-home-LAN'
+	option src 'wan'
+	option src_ip '192.168.1.0/24'
+	option proto 'tcp'
+	option dest_port '22 80 443'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Allow-AmneziaWG'
+	option src 'wan'
+	option proto 'udp'
+	option dest_port '43821'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Contours-DHCP'
+	option src '*'
+	option proto 'udp'
+	option dest_port '67'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Contours-ICMP'
+	option src '*'
+	option proto 'icmp'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Edge-DNS'
+	option src 'edge'
+	option proto 'tcp udp'
+	option dest_port '53'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Corp-DNS'
+	option src 'corp'
+	option proto 'tcp udp'
+	option dest_port '53'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Edge-NPM-to-personal'
+	option src 'edge'
+	option src_ip '10.10.10.10'
+	option dest 'personal'
+	option proto 'tcp'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Edge-NPM-to-apps'
+	option src 'edge'
+	option src_ip '10.10.10.10'
+	option dest 'apps'
+	option proto 'tcp'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Edge-NPM-to-dev'
+	option src 'edge'
+	option src_ip '10.10.10.10'
+	option dest 'dev'
+	option proto 'tcp'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Edge-NPM-to-corp-guacamole'
+	option src 'edge'
+	option src_ip '10.10.10.10'
+	option dest 'corp'
+	option dest_ip '10.10.70.10'
+	option proto 'tcp'
+	option dest_port '8080'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Edge-NPM-to-omniroute-API-only'
+	option src 'edge'
+	option src_ip '10.10.10.10'
+	option dest 'llm'
+	option dest_ip '10.10.60.10'
+	option proto 'tcp'
+	option dest_port '20131'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Personal-to-omniroute'
+	option src 'personal'
+	option dest 'llm'
+	option dest_ip '10.10.60.10'
+	option proto 'tcp'
+	option dest_port '20131'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Apps-to-omniroute'
+	option src 'apps'
+	option dest 'llm'
+	option dest_ip '10.10.60.10'
+	option proto 'tcp'
+	option dest_port '20131'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Dev-to-omniroute'
+	option src 'dev'
+	option dest 'llm'
+	option dest_ip '10.10.60.10'
+	option proto 'tcp'
+	option dest_port '20131'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Agents-to-omniroute'
+	option src 'agents'
+	option dest 'llm'
+	option dest_ip '10.10.60.10'
+	option proto 'tcp'
+	option dest_port '20131'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Apps-to-claude-sdk-host'
+	option src 'apps'
+	option src_ip '10.10.30.10'
+	option dest 'agents'
+	option dest_ip '10.10.50.10'
+	option proto 'tcp'
+	option dest_port '8080 18090'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Agents-to-YouTrack-and-TMS'
+	option src 'agents'
+	option src_ip '10.10.50.10'
+	option dest 'apps'
+	option dest_ip '10.10.30.10'
+	option proto 'tcp'
+	option dest_port '8899 8511 2222 42000:42999'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Prometheus-scrape-edge'
+	option src 'personal'
+	option src_ip '10.10.20.10'
+	option dest 'edge'
+	option proto 'tcp'
+	option dest_port '9100 9101'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Prometheus-scrape-apps'
+	option src 'personal'
+	option src_ip '10.10.20.10'
+	option dest 'apps'
+	option proto 'tcp'
+	option dest_port '9100 9101'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Prometheus-scrape-dev'
+	option src 'personal'
+	option src_ip '10.10.20.10'
+	option dest 'dev'
+	option proto 'tcp'
+	option dest_port '9100 9101'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Prometheus-scrape-agents'
+	option src 'personal'
+	option src_ip '10.10.20.10'
+	option dest 'agents'
+	option proto 'tcp'
+	option dest_port '9100 9101'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Prometheus-scrape-llm'
+	option src 'personal'
+	option src_ip '10.10.20.10'
+	option dest 'llm'
+	option proto 'tcp'
+	option dest_port '9100 9101'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Prometheus-scrape-corp-gw'
+	option src 'personal'
+	option src_ip '10.10.20.10'
+	option dest 'corp'
+	option dest_ip '10.10.70.10'
+	option proto 'tcp'
+	option dest_port '9100 9101'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Block-edge-to-Home-RFC1918'
+	option src 'edge'
+	option dest 'wan'
+	list dest_ip '192.168.0.0/16'
+	list dest_ip '10.0.0.0/8'
+	list dest_ip '172.16.0.0/12'
+	option proto 'all'
+	option target 'REJECT'
+
+config rule
+	option name 'Block-corp-to-Home-RFC1918'
+	option src 'corp'
+	option dest 'wan'
+	list dest_ip '192.168.0.0/16'
+	list dest_ip '10.0.0.0/8'
+	list dest_ip '172.16.0.0/12'
+	option proto 'all'
+	option target 'REJECT'
+
+config rule
+	option name 'Agents-local-singbox-http'
+	option src 'agents'
+	option proto 'tcp'
+	option dest_port '1080'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Grafana-to-hrBot-DEV-DB'
+	option src 'personal'
+	option src_ip '10.10.20.10'
+	option dest 'dev'
+	option dest_ip '10.10.40.10'
+	option proto 'tcp'
+	option dest_port '5433'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Grafana-to-hrBot-PROD-DB'
+	option src 'personal'
+	option src_ip '10.10.20.10'
+	option dest 'apps'
+	option dest_ip '10.10.30.10'
+	option proto 'tcp'
+	option dest_port '5432'
+	option target 'ACCEPT'
+
+config redirect
+	option name 'DNAT-WAN-HTTP'
+	option src 'wan'
+	option src_dport '80'
+	option proto 'tcp'
+	option dest 'edge'
+	option dest_ip '10.10.10.10'
+	option dest_port '80'
+	option target 'DNAT'
+
+config redirect
+	option name 'DNAT-WAN-HTTPS'
+	option src 'wan'
+	option src_dport '443'
+	option proto 'tcp udp'
+	option dest 'edge'
+	option dest_ip '10.10.10.10'
+	option dest_port '443'
+	option target 'DNAT'
+
+config redirect
+	option name 'DNAT-WAN-LiveKit-TCP'
+	option src 'wan'
+	option src_dport '7881'
+	option proto 'tcp'
+	option dest 'apps'
+	option dest_ip '10.10.30.10'
+	option dest_port '7881'
+	option target 'DNAT'
+
+config redirect
+	option name 'DNAT-WAN-LiveKit-UDP'
+	option src 'wan'
+	option src_dport '7882'
+	option proto 'udp'
+	option dest 'apps'
+	option dest_ip '10.10.30.10'
+	option dest_port '7882'
+	option target 'DNAT'
+
+config redirect
+	option name 'DNAT-WAN-SSH-VDI'
+	option src 'wan'
+	option src_ip '!192.168.1.0/24'
+	option src_dport '22'
+	option proto 'tcp'
+	option dest 'corp'
+	option dest_ip '10.10.70.10'
+	option dest_port '22'
+	option target 'DNAT'
+

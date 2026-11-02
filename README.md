@@ -1,141 +1,72 @@
-# My HomeLab Server
+# My HomeLab Server (`gigglin-pve`)
 
-This repository contains the configuration, deployment scripts, and docker-compose files for a personal HomeLab server infrastructure. It combines **Docker Compose** architectures for most services with **K3s (Kubernetes)** for specific enterprise stacks like Matrix.
-
-## 🏗 Infrastructure Overview
-- **Base OS**: Ubuntu (VPS / Local Mini PC)
-- **Container Runtimes**: Docker (Portainer/Native) & K3s (Lightweight Kubernetes)
-- **Ingress & Proxy**: [Nginx Proxy Manager](https://nginxproxymanager.com/) running via docker in the root directory. Handles SSL termination and subdomains.
-- **Landing Page**: Custom nginx-based personal portfolio website running alongside NPM from the prebuilt `ghcr.io/gi99lin/portfolio:latest` image.
-
-### 🚀 Quick Start
-1. **Basic Host Setup**: Configure your Ubuntu server environment and firewall limits.
-2. **Setup Proxy & Landing**: At the root of this project, run `docker compose up -d` to spin up Nginx Proxy Manager and the local Landing page.
-3. **Deploy Services**: Navigate to individual directories (e.g., `cd openclaw`) to configure `.env` files and run deployment commands/scripts.
-
-*(For detailed local Matrix deployment and K3s instructions, see [LOCAL_DEPLOY.md](./LOCAL_DEPLOY.md))*
-
-### 🔄 Auto-deploy (Watchtower)
-[`watchtower/`](./watchtower) runs [Watchtower](https://containrrr.dev/watchtower/), which polls GHCR every
-2 minutes and restarts any container labelled `com.centurylinklabs.watchtower.enable=true` when a newer
-`:latest` image is published. With it running, **a `git push` is the whole deploy** — GitHub Actions builds and
-pushes the image, Watchtower picks it up. Unlabeled containers (NPM, its DB) are never touched.
-
-```bash
-docker login ghcr.io -u Gi99lin   # once, so Watchtower can pull private images
-cd watchtower && docker compose up -d
-```
-
-### 🌐 Public demos (no password, fake data)
-Portfolio-facing demos of the dashboards, safe to expose publicly — they ship canned data and have no backend:
-- [`life-dashboard-demo/`](./life-dashboard-demo) → `demo.gigglin.tech`
-- [`status-dashboard-demo/`](./status-dashboard-demo) → `infra.gigglin.tech`
-
-```bash
-cd life-dashboard-demo && docker compose up -d
-cd ../status-dashboard-demo && docker compose up -d
-```
-Then add the matching Proxy Hosts in NPM. Full runbook (DNS, NPM, phases) lives in the
-`status_dashboard` repo at `docs/DEPLOY.md`.
+Infrastructure-as-Code, Docker Compose stacks, router configurations, and backup tooling for a segmented **Proxmox VE 9.2** HomeLab behind an **OpenWrt 25.12.6** security/routing appliance (`AmneziaWG` + `sing-box` + `nftables`).
 
 ---
 
-## 🤖 AI & LLM Ecosystem
+## 🏗 Architecture & Isolated VLAN Contours
 
-### OpenClaw (Multi-Agent System)
-Personal AI assistant framework with persistent memory, multi-agent orchestration, and Telegram bots (Dev Team, QA, FinAnalyst, etc.).
-- **Location**: [`openclaw/`](./openclaw)
-- **Deployment**: `cd openclaw && docker compose up -d`
+All workloads are isolated into **7 L3-segmented VLAN contours** on internal trunk `vmbr1` behind `gigglin-router` (`VM 110`, WAN `192.168.1.13`, VPN `10.10.99.1/24`). Inter-VLAN forwarding defaults to `REJECT`, with explicit pinholes only where required.
 
-### Hermes (AI Agents)
-Specialized AI agents including `hermes-qa` for QA automation, `hermes-finanalyst` for financial research, and `hermes-tasks` — the Mission Control personal task agent (Telegram intake → decomposition → YouTrack, daily digests, weekly review).
-- **Location**: [`hermes/`](./hermes) • Runbook: [`hermes/hermes-tasks/SETUP.md`](./hermes/hermes-tasks/SETUP.md)
-
-### YouTrack (Task Tracker)
-Self-hosted YouTrack Server — the task database behind `hermes-tasks`. Includes the "Mission Control" preset bootstrap (projects, fields, board, seed import from Obsidian).
-- **Location**: [`youtrack/`](./youtrack)
-- **Deployment**: `cd youtrack && ./install.sh`
-
-### Manager Helper (Telegram → YouTrack)
-Telegram bot (@Gigglin/@Mirabilis) that turns manager voice notes/text into structured YouTrack tasks — LLM parsing, assignee resolution, per-project routing. Source in the separate `manager-helper` repo; image auto-builds to `ghcr.io/gi99lin/manager-helper:latest` on push, Watchtower deploys it here.
-- **Location**: [`manager-helper/`](./manager-helper) • Runbook: [`manager-helper/SETUP.md`](./manager-helper/SETUP.md)
-- **Deployment**: `cd manager-helper && docker compose up -d`
-
-### LibreChat
-An enterprise-grade, unified web interface for interacting with various LLM providers.
-- **Location**: [`librechat/`](./librechat)
-
-### OmniRoute
-API routing proxy and load balancer to manage, monitor, and route inference LLM requests (used seamlessly by OpenClaw).
-- **Location**: [`omniroute/`](./omniroute)
-
-### AI Presentation & Testcase Generators
-- **AI Presentation**: Web service for generating presentation materials via AI. Location: [`ai-presentation/`](./ai-presentation)
-- **AI Testcase Generator**: Service to automatically generate test cases using LLMs. Location: [`ai-testcase-generator/`](./ai-testcase-generator)
+| Contour | VMID | IP / VLAN | SSH Alias & VPN DNS | Internet Egress Policy | Deployed Services |
+|---|---|---|---|---|---|
+| **mgmt** | `pve`<br>`110` | `192.168.1.12`<br>`192.168.1.13` | `gigglin-pve` (`https://pve.home.arpa`)<br>`gigglin-router` (`http://router.home.arpa`) | Direct ISP | Proxmox VE 9.2 hypervisor (`ext4` + `LVM-thin`); OpenWrt router (`AmneziaWG`, `sing-box`, `nftables`, `dnsmasq`) |
+| **1. edge** | `111` | `10.10.10.10/24` (`VLAN 10`) | `gigglin-edge` (`http://npm.home.arpa`) | Direct ISP | `nginx-proxy-manager` + MariaDB, portfolio `landing`, `life-dashboard-demo` (`demo.gigglin.tech`), `status-dashboard-demo` (`infra.gigglin.tech`) |
+| **2. personal** | `120` | `10.10.20.10/24` (`VLAN 20`) | `gigglin-personal` (`personal.home.arpa`) | Direct, except Telegram & `*.open-meteo.com` → `proxy-failover` | `nextcloud` (`cloud.gigglin.tech`, 4 TB HDD `/srv/nextcloud-data`), `life-dashboard` (`dash.gigglin.tech`), `status-dashboard-api`, `mcp-telegram-cloud` (`mcp-tg.gigglin.tech`), `prometheus` + `grafana` (`grafana.gigglin.tech`) |
+| **3. apps** | `130` | `10.10.30.10/24` (`VLAN 30`) | `gigglin-apps` (`apps.home.arpa`) | Direct, except Telegram → `proxy-failover` | `youtrack` (`youtrack.gigglin.tech`), `fluxer` (`fluxer.gigglin.tech` + LiveKit `7881/tcp`, `7882/udp`), `ai-testcase-generator` (`tms.gigglin.tech` + `testcase-tunnel`), `hrbot_prod`, `manager-helper`, `ai-presentation` |
+| **4. dev** | `140` | `10.10.40.10/24` (`VLAN 40`) | `gigglin-dev` (`dev.home.arpa`) | **All traffic** → `proxy-failover` (`212.*` → `194.*`, fail-closed) | `dmaic-studio` (`dmaic.gigglin.tech`), `dmaic-old` (`dmaic-old.gigglin.tech`), `hrbot_dev`, `github-runner` (`tms-ci-dind`), `actions-runner-dmaic.service` |
+| **5. agents** | `150` | `10.10.50.10/24` (`VLAN 50`) | `gigglin-agents` (`agents.home.arpa`) | **Strict single proxy** `proxy-kz` (`212.116.240.211`, **no rotation**, fail-closed) | `claude-sdk-host` (`:18090` + `tms-credentials` + `egress`/`netguard`), `hermes-tasks` |
+| **6. llm** | `160` | `10.10.60.10/24` (`VLAN 60`) | `gigglin-llm` (`http://omni.home.arpa`) | **Strict single proxy** `proxy-kz` (`212.116.240.211`, **no rotation**, fail-closed) | `omniroute` (`:20131` `/v1/*` API gateway + VPN-only `:20130` Dashboard) |
+| **7. corp** | `171`<br>`170` | `10.10.70.10/24`<br>`10.10.70.20/24` (`VLAN 70`) | `gigglin-corp-gw` (`corp-gw.home.arpa`)<br>`corp-vm` (`corp-win10.home.arpa`) | Direct ISP; zero access to internal VLANs | `corp-gw`: `guacamole` (`rdp.gigglin.tech`), `trueconf` (+ daily cron), VDI reverse-tunnel SSH endpoint.<br>`corp-win10`: native Windows 10 VM |
 
 ---
 
-## 🛡️ Privacy, Proxy, VPN & Remote Access
+## 🔒 Security & Routing Invariants
 
-### Marzneshin (Xray Proxy)
-Advanced VPN and proxy management interface using the Xray core. Handles secure access workflows.
-- **Location**: [`marzneshin/`](./marzneshin)
-
-### Apache Guacamole
-Clientless remote desktop gateway supporting standard protocols like VNC, RDP, and SSH.
-- **Location**: [`guacamole/`](./guacamole)
-
----
-
-## ☁️ Cloud, Synchronization & Dashboards
-
-### Nextcloud
-Self-hosted platform for comprehensive file storage, calendar, and contacts synchronization. Includes Talk integration.
-- **Location**: [`nextcloud/`](./nextcloud)
-
-### Syncthing
-Decentralized, continuous file synchronization service operating smoothly across devices.
-- **Location**: [`syncthing/`](./syncthing)
-
-### Life Dashboard
-Personal dashboard for metric tracking and analytics visualization.
-- **Location**: [`life-dashboard/`](./life-dashboard)
+1. **Single LLM Gateway (`omniroute`)**:
+   - Every internal service across `personal`, `apps`, `dev`, and `agents` calls LLMs exclusively through `http://10.10.60.10:20131/v1`.
+   - `gigglin-router` rejects direct DNS/TLS connections to external LLM providers from `VLAN 20/30/40` (and non-Anthropic providers from `VLAN 50`, preserving Claude OAuth for `claude-sdk-host`).
+   - External clients access `https://omniroute.gigglin.tech/v1/*` via NPM forwarding strictly to port `20131` (`/` returns `404`; Admin UI `:20130` is reachable only over AmneziaWG VPN at `http://omni.home.arpa`).
+2. **Router-Enforced Fail-Closed Proxying**:
+   - Upstream proxy credentials exist in a single place: `/etc/sing-box/config.json` on `gigglin-router` (template in [`infra/openwrt-router/sing-box.config.example.json`](./infra/openwrt-router/sing-box.config.example.json)).
+   - `nftables` rules ([`infra/openwrt-router/20-contours-egress.nft`](./infra/openwrt-router/20-contours-egress.nft)) enforce strict fail-closed kill-switches and block direct WAN DNS/QUIC leaks.
+3. **VPN-Only Admin Endpoints (Zero Port Numbers Required)**:
+   - `https://pve.home.arpa` → Proxmox VE Web UI
+   - `http://router.home.arpa` → OpenWrt LuCI
+   - `http://npm.home.arpa` → Nginx Proxy Manager Admin UI (bound via isolated VIP `10.10.10.11`, unreachable from WAN)
+   - `http://omni.home.arpa` → OmniRoute Admin Dashboard
 
 ---
 
-## 💬 Communication
+## 💾 Two-Tier Backup Strategy
 
-### Matrix Server (Element Server Suite)
-A complete federated Matrix messaging stack with built-in VoIP via LiveKit. Deployed entirely on K3s.
-- **Location**: [`matrix/`](./matrix)
-- **Docs**: [Deployment Walkthrough](./matrix/WALKTHROUGH.md)
-
-### MCP Telegram Cloud
-Self-hosted, single-operator-mode MCP server exposing Telegram (read messages, search chats, download media, multi-account switching) to Claude/ChatGPT via `mcp-tg.gigglin.tech`. Runs an admin-login-gated fork ([Gi99lin/mcp-telegram-cloud](https://github.com/Gi99lin/mcp-telegram-cloud), upstream PR: [mcp-telegram/mcp-telegram-cloud#20](https://github.com/mcp-telegram/mcp-telegram-cloud/pull/20)) instead of the public hosted `mcp-telegram.com`, so only this deployment's operator can ever register an MCP client.
-- **Location**: [`mcp-telegram/`](./mcp-telegram) • Runbook: [`mcp-telegram/SETUP.md`](./mcp-telegram/SETUP.md)
-- **Deployment**: `cd mcp-telegram && docker compose up -d`
+1. **Local Full-VM Snapshots (`03:30` daily on `gigglin-pve`)**:
+   - Proxmox `vzdump` ([`infra/proxmox/jobs.cfg`](./infra/proxmox/jobs.cfg)) takes `zstd`-compressed QEMU snapshots of all 9 active VMs (`110..171`) into `/mnt/backups/dump` (`keep-daily=4, keep-weekly=2`).
+2. **Centralized Off-Site Backblaze B2 Restic Backups**:
+   - **`04:30` on `gigglin-pve` ([`backup/pve-restic-backup.sh`](./backup/pve-restic-backup.sh))**: Triggers consistent DB dumps (`Postgres`/`MariaDB`) inside all contour VMs over `qemu-guest-agent` (virtio-serial, zero network pinholes and zero B2 keys inside application VMs), exports Proxmox & OpenWrt configs, mounts brief `fsfreeze` read-only LVM-thin snapshots of all 7 Linux VMs, and pushes deduplicated backups to Backblaze B2 (`--host gigglin-pve`) with Telegram status alerts.
+   - **`03:00` UTC on `VM 120` ([`backup/backup.sh`](./backup/backup.sh))**: Incrementally backs up the 4 TB raw HDD (`/srv/nextcloud-data`) + `nextcloud-db` dump to Backblaze B2 (`--host homelab`).
 
 ---
 
-## 📂 Full Directory Structure
-- `_archive/` - Archived templates and legacy files.
-- `ai-presentation/` - Service for generating presentations using AI.
-- `ai-testcase-generator/` - Automatic software testcase generator.
-- `backup/` - Tools or scripts associated with taking system backups.
-- `dashboard/` - Minimal start dashboard configuration.
-- `guacamole/` - Apache Guacamole remote desktop gateway.
-- `hermes/` - Hermes QA and Financial AI agents.
-- `infrastructure/` - Core host and K3s installation scripts.
-- `librechat/` - Chat UI for local and remote LLMs.
-- `life-dashboard/` - Personal dashboard for tracking and analytics.
-- `livekit-config/` - Custom configuration sets for LiveKit services.
-- `manager-helper/` - Telegram → YouTrack task bot (image from the separate `manager-helper` repo).
-- `marzneshin/` - Xray proxy panel configuration.
-- `mcp-telegram/` - Self-hosted MCP Telegram Cloud, single-operator mode (image from the separate `mcp-telegram-cloud` fork).
-- `matrix/` - Complete Matrix deployment scripts for K3s.
-- `nextcloud/` - Nextcloud deployment files.
-- `omniroute/` - Setup for LLM proxy routing.
-- `openclaw/` - The OpenClaw AI Multi-Agent architecture.
-- Portfolio landing page - deployed from `ghcr.io/gi99lin/portfolio:latest`; source lives in the separate `portfolio` repository.
-- `scripts/` - Maintenance and utility bash scripts.
-- `syncthing/` - File synchronization component.
+## 🤖 AI & Feature Documentation
+
+- Feature documentation and coverage: [`docs/features/INDEX.md`](./docs/features/INDEX.md).
+- Personal Claude SDK service architecture: [`docs/superpowers/specs/2026-10-27-claude-sdk-host-design.md`](./docs/superpowers/specs/2026-10-27-claude-sdk-prior-art.md) & [`claude-sdk-host/docker-compose.contours.yml`](./claude-sdk-host/docker-compose.contours.yml) (deployed in `agents`, `VM 150`).
+- Auto-deploy via [`watchtower/`](./watchtower): runs per contour VM, polling GHCR every 2 minutes for containers labeled `com.centurylinklabs.watchtower.enable=true`.
+
+---
+
+## 📂 Repository Layout
+
+- `infra/proxmox/` — Proxmox VE network trunk (`vmbr0`/`vmbr1`) and `vzdump` backup schedule.
+- `infra/openwrt-router/` — Sanitized OpenWrt `network`, `firewall`, `dhcp`, `nftables` kill-switch, WebRTC policy routing, and `sing-box` config template.
+- `backup/` — Centralized Proxmox QGA+LVM Restic script (`pve-restic-backup.sh`) and Nextcloud HDD Restic script (`backup.sh`).
+- `claude-sdk-host/` — Contour network override for `claude-sdk-host` (`VM 150`).
+- `omniroute/` — Unified LLM API gateway (`VM 160`).
+- `hermes/` — Mission Control `hermes-tasks` agent (`VM 150`).
+- `ai-testcase-generator/`, `youtrack/`, `manager-helper/`, `ai-presentation/` — Application stacks (`VM 130`).
+- `github-runner/` — Ephemeral DinD CI runner (`VM 140`).
+- `nextcloud/`, `life-dashboard/`, `status-dashboard/`, `mcp-telegram/`, `monitoring/` — Personal & observability stacks (`VM 120`).
+- `docker-compose.yml`, `life-dashboard-demo/`, `status-dashboard-demo/` — Edge NPM + portfolio landing + public demo stacks (`VM 111`).
+- `guacamole/` — Remote desktop gateway (`VM 171`).
+- `_archive/` — Retired pre-Proxmox single-node stacks (`matrix`, `k3s`, `openclaw`, `librechat`, `marzneshin`, `syncthing`).
