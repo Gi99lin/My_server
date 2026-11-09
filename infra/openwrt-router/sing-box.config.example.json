@@ -1,0 +1,370 @@
+{
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "type": "hosts",
+        "tag": "dns-hosts",
+        "predefined": {
+          "pve.home.arpa": "192.168.1.12",
+          "router.home.arpa": "192.168.1.13",
+          "edge.home.arpa": "10.10.10.10",
+          "personal.home.arpa": "10.10.20.10",
+          "apps.home.arpa": "10.10.30.10",
+          "dev.home.arpa": "10.10.40.10",
+          "agents.home.arpa": "10.10.50.10",
+          "llm.home.arpa": "10.10.60.10",
+          "omniroute.home.arpa": "10.10.60.10",
+          "youtrack.home.arpa": "10.10.30.10",
+          "corp-gw.home.arpa": "10.10.70.10",
+          "corp-win10.home.arpa": "10.10.70.20"
+        }
+      },
+      {
+        "type": "https",
+        "tag": "dns-kz",
+        "server": "1.1.1.1",
+        "detour": "proxy-kz"
+      },
+      {
+        "type": "https",
+        "tag": "dns-failover",
+        "server": "1.1.1.1",
+        "detour": "proxy-failover"
+      },
+      {
+        "type": "udp",
+        "tag": "dns-direct",
+        "server": "8.8.8.8"
+      },
+      {
+        "type": "udp",
+        "tag": "dns-awg-local",
+        "server": "127.0.0.1",
+        "server_port": 53
+      }
+    ],
+    "rules": [
+      {
+        "inbound": "awg-dns",
+        "domain_suffix": [
+          "home.arpa",
+          "lan",
+          "10.in-addr.arpa",
+          "168.192.in-addr.arpa"
+        ],
+        "action": "route",
+        "server": "dns-awg-local"
+      },
+      {
+        "inbound": "awg-dns",
+        "action": "route",
+        "server": "dns-kz"
+      },
+      {
+        "domain_suffix": [
+          ".home.arpa"
+        ],
+        "server": "dns-hosts"
+      },
+      {
+        "source_ip_cidr": [
+          "10.10.20.0/24",
+          "10.10.30.0/24",
+          "10.10.40.0/24"
+        ],
+        "domain_suffix": [
+          "openrouter.ai",
+          "bothub.chat",
+          "api.openai.com",
+          "chatgpt.com",
+          "anthropic.com",
+          "claude.ai",
+          "generativelanguage.googleapis.com",
+          "aiplatform.googleapis.com",
+          "api.deepseek.com",
+          "api.mistral.ai",
+          "api.groq.com",
+          "api.together.xyz",
+          "api.x.ai",
+          "api.fireworks.ai",
+          "api.perplexity.ai",
+          "dashscope.aliyuncs.com"
+        ],
+        "action": "reject"
+      },
+      {
+        "source_ip_cidr": [
+          "10.10.50.0/24"
+        ],
+        "domain_suffix": [
+          "openrouter.ai",
+          "bothub.chat",
+          "api.openai.com",
+          "chatgpt.com",
+          "generativelanguage.googleapis.com",
+          "aiplatform.googleapis.com",
+          "api.deepseek.com",
+          "api.mistral.ai",
+          "api.groq.com",
+          "api.together.xyz",
+          "api.x.ai",
+          "api.fireworks.ai",
+          "api.perplexity.ai",
+          "dashscope.aliyuncs.com"
+        ],
+        "action": "reject"
+      },
+      {
+        "source_ip_cidr": [
+          "10.10.50.0/24",
+          "10.10.60.0/24"
+        ],
+        "server": "dns-kz"
+      },
+      {
+        "source_ip_cidr": [
+          "10.10.40.0/24",
+          "10.10.20.0/24"
+        ],
+        "server": "dns-failover"
+      },
+      {
+        "domain_suffix": [
+          "telegram.org",
+          "telegram.me",
+          "telegram.dog",
+          "t.me",
+          "tdesktop.com",
+          "telegra.ph",
+          "telesco.pe",
+          "tx.me",
+          "usercontent.dev",
+          "cdn-telegram.org",
+          "open-meteo.com"
+        ],
+        "server": "dns-failover"
+      }
+    ],
+    "final": "dns-direct",
+    "strategy": "ipv4_only"
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "interface_name": "sb0",
+      "address": [
+        "198.18.0.1/30"
+      ],
+      "mtu": 1480,
+      "auto_route": false,
+      "strict_route": false,
+      "stack": "system"
+    },
+    {
+      "type": "http",
+      "tag": "agents-http-in",
+      "listen": "10.10.50.1",
+      "listen_port": 1080
+    },
+    {
+      "type": "direct",
+      "tag": "awg-dns",
+      "listen": "10.10.99.1",
+      "listen_port": 1053
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "http",
+      "tag": "proxy-kz",
+      "server": "212.116.240.211",
+      "server_port": 1080,
+      "username": "openclaw",
+      "password": "<PROXY_PASSWORD>"
+    },
+    {
+      "type": "http",
+      "tag": "proxy-backup",
+      "server": "194.60.132.37",
+      "server_port": 1080,
+      "username": "openclaw",
+      "password": "<PROXY_PASSWORD>"
+    },
+    {
+      "type": "urltest",
+      "tag": "proxy-failover",
+      "outbounds": [
+        "proxy-kz",
+        "proxy-backup"
+      ],
+      "url": "https://cp.cloudflare.com/generate_204",
+      "interval": "15s",
+      "tolerance": 2500,
+      "idle_timeout": "30m",
+      "interrupt_exist_connections": true
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "default_domain_resolver": "dns-direct",
+    "rules": [
+      {
+        "inbound": "awg-dns",
+        "source_ip_cidr": [
+          "10.10.99.2/32"
+        ],
+        "action": "hijack-dns"
+      },
+      {
+        "inbound": "awg-dns",
+        "action": "reject"
+      },
+      {
+        "action": "sniff",
+        "timeout": "300ms"
+      },
+      {
+        "protocol": "dns",
+        "action": "hijack-dns"
+      },
+      {
+        "network": "udp",
+        "port": 443,
+        "action": "reject"
+      },
+      {
+        "ip_is_private": true,
+        "action": "reject"
+      },
+      {
+        "source_ip_cidr": [
+          "10.10.20.0/24",
+          "10.10.30.0/24",
+          "10.10.40.0/24"
+        ],
+        "domain_suffix": [
+          "openrouter.ai",
+          "bothub.chat",
+          "api.openai.com",
+          "chatgpt.com",
+          "anthropic.com",
+          "claude.ai",
+          "generativelanguage.googleapis.com",
+          "aiplatform.googleapis.com",
+          "api.deepseek.com",
+          "api.mistral.ai",
+          "api.groq.com",
+          "api.together.xyz",
+          "api.x.ai",
+          "api.fireworks.ai",
+          "api.perplexity.ai",
+          "dashscope.aliyuncs.com"
+        ],
+        "action": "reject"
+      },
+      {
+        "source_ip_cidr": [
+          "10.10.50.0/24"
+        ],
+        "domain_suffix": [
+          "openrouter.ai",
+          "bothub.chat",
+          "api.openai.com",
+          "chatgpt.com",
+          "generativelanguage.googleapis.com",
+          "aiplatform.googleapis.com",
+          "api.deepseek.com",
+          "api.mistral.ai",
+          "api.groq.com",
+          "api.together.xyz",
+          "api.x.ai",
+          "api.fireworks.ai",
+          "api.perplexity.ai",
+          "dashscope.aliyuncs.com"
+        ],
+        "action": "reject"
+      },
+      {
+        "source_ip_cidr": [
+          "10.10.60.0/24"
+        ],
+        "outbound": "proxy-kz"
+      },
+      {
+        "source_ip_cidr": [
+          "10.10.50.0/24"
+        ],
+        "outbound": "proxy-kz"
+      },
+      {
+        "source_ip_cidr": [
+          "10.10.40.0/24",
+          "10.10.20.0/24"
+        ],
+        "outbound": "proxy-failover"
+      },
+      {
+        "source_ip_cidr": [
+          "10.10.20.0/24",
+          "10.10.30.0/24"
+        ],
+        "domain_suffix": [
+          "telegram.org",
+          "telegram.me",
+          "telegram.dog",
+          "t.me",
+          "tdesktop.com",
+          "telegra.ph",
+          "telesco.pe",
+          "tx.me",
+          "usercontent.dev",
+          "cdn-telegram.org",
+          "open-meteo.com"
+        ],
+        "outbound": "proxy-failover"
+      },
+      {
+        "source_ip_cidr": [
+          "10.10.20.0/24",
+          "10.10.30.0/24"
+        ],
+        "ip_cidr": [
+          "91.108.56.0/22",
+          "91.108.4.0/22",
+          "91.108.8.0/22",
+          "91.108.16.0/22",
+          "91.108.12.0/22",
+          "149.154.160.0/20",
+          "91.105.192.0/23",
+          "91.108.20.0/22",
+          "185.76.151.0/24"
+        ],
+        "outbound": "proxy-failover"
+      },
+      {
+        "source_ip_cidr": [
+          "10.10.20.0/24",
+          "10.10.30.0/24"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "network": [
+          "tcp",
+          "udp",
+          "icmp"
+        ],
+        "action": "reject"
+      }
+    ],
+    "final": "direct"
+  }
+}

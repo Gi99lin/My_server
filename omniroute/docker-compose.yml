@@ -1,8 +1,4 @@
-
 services:
-  # ==================== OmniRoute ====================
-  # По умолчанию используем официальный образ (позволяет избежать проблем при сборке).
-  # https://hub.docker.com/r/diegosouzapw/omniroute
   omniroute:
     container_name: omniroute
     image: diegosouzapw/omniroute:latest
@@ -17,14 +13,9 @@ services:
       - HOSTNAME=0.0.0.0
       - DATA_DIR=/app/data
       - TZ=Europe/Moscow
-      # ── Исходящий прокси для upstream-провайдеров ──
-#      - HTTP_PROXY=${OMNIROUTE_PROXY_URL}
-#      - HTTPS_PROXY=${OMNIROUTE_PROXY_URL}
-#      - ALL_PROXY=${OMNIROUTE_PROXY_URL}
-#      - NO_PROXY=localhost,127.0.0.1
     ports:
-      - "${OMNIROUTE_DASHBOARD_PORT:-20130}:${PORT:-20128}"   # Dashboard (UI)
-      - "${OMNIROUTE_API_PORT:-20131}:${API_PORT:-20129}"     # API endpoint
+      - "0.0.0.0:${OMNIROUTE_DASHBOARD_PORT:-20130}:${PORT:-20128}"
+      - "0.0.0.0:${OMNIROUTE_API_PORT:-20131}:${API_PORT:-20129}"
     volumes:
       - omniroute_data:/app/data
     healthcheck:
@@ -33,18 +24,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
-    networks:
-      - omniroute_network
-      - proxy_network
-
-# ==================== Networks & Volumes ====================
-networks:
-  omniroute_network:
-    driver: bridge
-  proxy_network:
-    external: true
-    name: my_server_proxy_network
 
 volumes:
   omniroute_data:
+    external: true
     name: omniroute_data

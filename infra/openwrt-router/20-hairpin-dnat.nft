@@ -1,0 +1,11 @@
+chain hairpin_dstnat {
+    type nat hook prerouting priority dstnat - 5; policy accept;
+    iifname { "eth0.10", "eth0.20", "eth0.30", "eth0.40", "eth0.50", "awg0" } ip daddr 128.0.130.144 tcp dport { 80, 443 } dnat ip to 10.10.10.10 comment "Hairpin public HTTP/HTTPS to edge NPM"
+    iifname { "eth0.10", "eth0.20", "eth0.30", "eth0.40", "eth0.50", "awg0" } ip daddr 128.0.130.144 udp dport 443 dnat ip to 10.10.10.10 comment "Hairpin public QUIC/HTTP3 to edge NPM"
+}
+
+chain hairpin_srcnat {
+    type nat hook postrouting priority srcnat - 5; policy accept;
+    oifname "eth0.10" ip saddr 10.10.10.0/24 ip daddr 10.10.10.10 tcp dport { 80, 443 } masquerade comment "Hairpin edge-to-edge masquerade"
+    oifname "eth0.10" ip saddr 10.10.10.0/24 ip daddr 10.10.10.10 udp dport 443 masquerade comment "Hairpin edge-to-edge QUIC masquerade"
+}

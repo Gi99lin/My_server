@@ -1,0 +1,143 @@
+
+config interface 'loopback'
+	option device 'lo'
+	option proto 'static'
+	list ipaddr '127.0.0.1/8'
+
+config globals 'globals'
+	option dhcp_default_duid '00045e00bbca8f4e420eb910b68891f9c1e3'
+	option ula_prefix 'fdcf:fb1:1503::/48'
+
+config interface 'wan'
+	option device 'eth1'
+	option proto 'static'
+	option ipaddr '192.168.1.13'
+	option netmask '255.255.255.0'
+	option gateway '192.168.1.1'
+	option peerdns '0'
+	list dns '8.8.8.8'
+	list dns '8.8.4.4'
+	list dns '1.1.1.1'
+
+config interface 'wan6'
+	option device 'eth1'
+	option proto 'none'
+
+config interface 'awg0'
+	option proto 'amneziawg'
+	option private_key '<REDACTED>'
+	option listen_port '43821'
+	list addresses '10.10.99.1/24'
+	option mtu '1380'
+	option awg_jc '6'
+	option awg_jmin '56'
+	option awg_jmax '350'
+	option awg_s1 '37'
+	option awg_s2 '120'
+	option awg_h1 '199167664'
+	option awg_h2 '444377874'
+	option awg_h3 '1707601169'
+	option awg_h4 '2142378250'
+
+config amneziawg_awg0
+	option description 'mac'
+	option public_key '<REDACTED>'
+	option preshared_key '<REDACTED>'
+	list allowed_ips '10.10.99.2/32'
+
+config amneziawg_awg0
+	option description 'phone'
+	option public_key '<REDACTED>'
+	option preshared_key '<REDACTED>'
+	list allowed_ips '10.10.99.3/32'
+
+config interface 'edge'
+	option device 'eth0.10'
+	option proto 'static'
+	option ipaddr '10.10.10.1'
+	option netmask '255.255.255.0'
+	option ipv6 '0'
+
+config interface 'personal'
+	option device 'eth0.20'
+	option proto 'static'
+	option ipaddr '10.10.20.1'
+	option netmask '255.255.255.0'
+	option ipv6 '0'
+
+config interface 'apps'
+	option device 'eth0.30'
+	option proto 'static'
+	option ipaddr '10.10.30.1'
+	option netmask '255.255.255.0'
+	option ipv6 '0'
+
+config interface 'dev'
+	option device 'eth0.40'
+	option proto 'static'
+	option ipaddr '10.10.40.1'
+	option netmask '255.255.255.0'
+	option ipv6 '0'
+
+config interface 'agents'
+	option device 'eth0.50'
+	option proto 'static'
+	option ipaddr '10.10.50.1'
+	option netmask '255.255.255.0'
+	option ipv6 '0'
+
+config interface 'llm'
+	option device 'eth0.60'
+	option proto 'static'
+	option ipaddr '10.10.60.1'
+	option netmask '255.255.255.0'
+	option ipv6 '0'
+
+config interface 'corp'
+	option device 'eth0.70'
+	option proto 'static'
+	option ipaddr '10.10.70.1'
+	option netmask '255.255.255.0'
+	option ipv6 '0'
+
+config rule
+	option priority '100'
+	option dest '10.10.0.0/16'
+	option lookup 'main'
+
+config rule
+	option priority '101'
+	option dest '192.168.1.0/24'
+	option lookup 'main'
+
+config rule
+	option priority '200'
+	option src '10.10.20.0/24'
+	option lookup '100'
+
+config rule
+	option priority '201'
+	option src '10.10.30.0/24'
+	option lookup '100'
+
+config rule
+	option priority '202'
+	option src '10.10.40.0/24'
+	option lookup '100'
+
+config rule
+	option priority '203'
+	option src '10.10.50.0/24'
+	option lookup '100'
+
+config rule
+	option priority '204'
+	option src '10.10.60.0/24'
+	option lookup '100'
+
+config route
+	option interface 'loopback'
+	option target '0.0.0.0/0'
+	option type 'unreachable'
+	option table '100'
+	option metric '9999'

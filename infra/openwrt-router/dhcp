@@ -1,0 +1,160 @@
+
+config dnsmasq
+	option domainneeded '1'
+	option boguspriv '1'
+	option filterwin2k '0'
+	option localise_queries '1'
+	option rebind_protection '1'
+	option rebind_localhost '1'
+	option local '/lan/'
+	option domain 'lan'
+	option expandhosts '1'
+	option nonegcache '0'
+	option cachesize '1000'
+	option authoritative '1'
+	option readethers '1'
+	option leasefile '/tmp/dhcp.leases'
+	option resolvfile '/tmp/resolv.conf.d/resolv.conf.auto'
+	option nonwildcard '1'
+	option localservice '1'
+	option ednspacket_max '1232'
+	option filter_aaaa '0'
+	option filter_a '0'
+
+config dhcp 'wan'
+	option interface 'wan'
+	option ignore '1'
+
+config odhcpd 'odhcpd'
+	option maindhcp '0'
+	option leasefile '/tmp/odhcpd.leases'
+	option leasetrigger '/usr/sbin/odhcpd-update'
+	option loglevel '4'
+	option piodir '/tmp/odhcpd-piodir'
+	option hostsdir '/tmp/hosts'
+
+config dhcp 'edge'
+	option interface 'edge'
+	option start '100'
+	option limit '50'
+	option leasetime '12h'
+	option dhcpv6 'disabled'
+	option ra 'disabled'
+	list dhcp_option '6,8.8.8.8,1.1.1.1'
+
+config dhcp 'personal'
+	option interface 'personal'
+	option start '100'
+	option limit '50'
+	option leasetime '12h'
+	option dhcpv6 'disabled'
+	option ra 'disabled'
+	list dhcp_option '6,8.8.8.8,1.1.1.1'
+
+config dhcp 'apps'
+	option interface 'apps'
+	option start '100'
+	option limit '50'
+	option leasetime '12h'
+	option dhcpv6 'disabled'
+	option ra 'disabled'
+	list dhcp_option '6,8.8.8.8,1.1.1.1'
+
+config dhcp 'dev'
+	option interface 'dev'
+	option start '100'
+	option limit '50'
+	option leasetime '12h'
+	option dhcpv6 'disabled'
+	option ra 'disabled'
+	list dhcp_option '6,8.8.8.8,1.1.1.1'
+
+config dhcp 'agents'
+	option interface 'agents'
+	option start '100'
+	option limit '50'
+	option leasetime '12h'
+	option dhcpv6 'disabled'
+	option ra 'disabled'
+	list dhcp_option '6,8.8.8.8,1.1.1.1'
+
+config dhcp 'llm'
+	option interface 'llm'
+	option start '100'
+	option limit '50'
+	option leasetime '12h'
+	option dhcpv6 'disabled'
+	option ra 'disabled'
+	list dhcp_option '6,8.8.8.8,1.1.1.1'
+
+config dhcp 'corp'
+	option interface 'corp'
+	option start '100'
+	option limit '50'
+	option leasetime '12h'
+	option dhcpv6 'disabled'
+	option ra 'disabled'
+	list dhcp_option '6,8.8.8.8,1.1.1.1'
+
+config domain
+	option name 'pve.home.arpa'
+	option ip '192.168.1.12'
+
+config domain
+	option name 'router.home.arpa'
+	option ip '192.168.1.13'
+
+config domain
+	option name 'edge.home.arpa'
+	option ip '10.10.10.10'
+
+config domain
+	option name 'personal.home.arpa'
+	option ip '10.10.20.10'
+
+config domain
+	option name 'apps.home.arpa'
+	option ip '10.10.30.10'
+
+config domain
+	option name 'youtrack.home.arpa'
+	option ip '10.10.30.10'
+
+config domain
+	option name 'dev.home.arpa'
+	option ip '10.10.40.10'
+
+config domain
+	option name 'agents.home.arpa'
+	option ip '10.10.50.10'
+
+config domain
+	option name 'llm.home.arpa'
+	option ip '10.10.60.10'
+
+config domain
+	option name 'omniroute.home.arpa'
+	option ip '10.10.60.10'
+
+config domain
+	option name 'corp-gw.home.arpa'
+	option ip '10.10.70.10'
+
+config domain
+	option name 'corp-win10.home.arpa'
+	option ip '10.10.70.20'
+
+config host
+	option name 'corp-win10'
+	option dns '1'
+	option mac '52:54:00:fd:44:40'
+	option ip '10.10.70.20'
+	option leasetime '12h'
+
+config domain
+	option name 'npm.home.arpa'
+	option ip '10.10.10.11'
+
+config domain
+	option name 'omni.home.arpa'
+	option ip '10.10.60.10'

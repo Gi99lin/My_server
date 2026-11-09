@@ -1,0 +1,7 @@
+# Enable only after the owner account has been initialized.
+# The router already permits apps -> agents:8080.
+services:
+  nginx:
+    ports: !override
+      - "127.0.0.1:18080:80"
+      - "10.10.50.10:8080:80"

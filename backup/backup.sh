@@ -291,13 +291,9 @@ log "Step 2: Running restic backup..."
 # restic dedupes well) plus install ISOs (4-5 GB each, easy to re-download
 # from Microsoft / fedorapeople). Exclude the ISOs.
 restic backup \
-  /home/gigglin/ \
-  /var/lib/docker/volumes/ \
+  --host homelab \
+  --group-by host \
   /srv/nextcloud-data \
-  /var/lib/libvirt/images \
-  /etc/libvirt/qemu \
-  /etc/iptables \
-  /var/lib/marznode \
   "$DUMP_DIR" \
   --exclude="/home/gigglin/.cache" \
   --exclude="/home/gigglin/.local/share/Trash" \
@@ -320,10 +316,10 @@ log "Step 2: Restic backup complete"
 # already succeeded (Step 2) — log it, count it as a warning, move on.
 log "Step 3: Applying retention policy..."
 if restic forget \
+  --host homelab \
   --keep-daily 30 \
   --keep-weekly 8 \
   --keep-monthly 12 \
-  --prune \
   2>&1 | tee -a "$LOG_FILE"; then
   log "Step 3: Retention policy applied"
 else

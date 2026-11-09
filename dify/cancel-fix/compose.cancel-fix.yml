@@ -1,0 +1,5 @@
+# Immutable local image ID for the validated candidate. Build it before use.
+services:
+  agent_backend:
+    image: sha256:b948cf0ab13f1a52526fc69afc03aa17a91824e6dbb184634cc56d95c3d8d493
+    pull_policy: never

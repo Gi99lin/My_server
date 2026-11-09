@@ -1,0 +1,5 @@
+#!/bin/sh
+ip rule del priority 150 2>/dev/null || true
+ip rule del priority 151 2>/dev/null || true
+ip rule add priority 150 from 10.10.30.10 ipproto tcp sport 7881 lookup main
+ip rule add priority 151 from 10.10.30.10 ipproto udp sport 7882 lookup main
