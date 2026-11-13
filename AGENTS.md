@@ -7,9 +7,9 @@ This repository is the authoritative source of truth for the user's **Proxmox VE
 ## 1. Hardware & Hypervisor (`gigglin-pve`)
 
 - **Host**: `gigglin-pve` (`192.168.1.12/24`, gateway `192.168.1.1`, WAN public IP `128.0.130.144`)
-- **CPU / RAM**: AMD Ryzen 5 7600X (6C / 12T), 32 GB DDR5 RAM (`~27.6 GB` allocated across 9 running VMs; legacy `VM 100` `gigglin-server` is powered off with `onboot=0` as cold rollback)
+- **CPU / RAM**: AMD Ryzen 5 7600X (6C / 12T), 32 GB DDR5 RAM (`29 GiB` allocated across 9 running VMs after the Dify pilot resize; legacy `VM 100` is an empty stopped shell; the pre-migration Ubuntu disk image was deleted on 2026-11-13)
 - **Storage**:
-  - `2 TB NVMe`: `local` (`100 GB` ext4 root + `/mnt/backups/dump` for `vzdump`) + `nvme-2tb` (`1.79 TB` LVM-thin pool for all VM root disks)
+  - `2 TB NVMe`: `local` (`100 GB` ext4 root; the `backups` thin LV at `/mnt/backups` is empty since local `vzdump` was retired on 2026-11-13) + `nvme-2tb` (`1.79 TB` LVM-thin pool for all VM root disks)
   - `4 TB WD Red Plus HDD` (`/dev/disk/by-id/ata-WDC_WD40EFZX-...`): passed through directly via `scsi1` to `VM 120` (`gigglin-personal`) and mounted at `/srv/nextcloud-data`
 - **Bridges** ([`infra/proxmox/interfaces`](./infra/proxmox/interfaces)):
   - `vmbr0` (`192.168.1.12/24`, physical `enp6s0`): Home LAN & WAN transit bridge.
@@ -98,8 +98,9 @@ Config files live in [`infra/openwrt-router/`](./infra/openwrt-router). After an
 
 ---
 
-## 5. Backups (`vzdump` + Centralized `restic`)
+## 5. Backups (Restic → Backblaze B2 only)
 
-1. **Daily `03:30` MSK (`gigglin-pve`)**: `vzdump` snapshots all 9 active VMs (`110, 111, 120, 130, 140, 150, 160, 170, 171`) to `/mnt/backups/dump` (`zstd`, `keep-daily=4, keep-weekly=2`).
-2. **Daily `04:30` MSK (`gigglin-pve`)**: `/root/pve-restic-backup.sh` ([`backup/pve-restic-backup.sh`](./backup/pve-restic-backup.sh)) runs pre-backup DB dumps inside all contour VMs via `qm guest exec`, exports Proxmox & OpenWrt configs, mounts read-only LVM-thin snapshots of all 7 Linux VMs (`110..171`), backs them up to Backblaze B2 (`--host gigglin-pve`), runs retention prune, and sends a Telegram notification.
-3. **Daily `03:00` UTC (`gigglin-personal`, `VM 120`)**: `/home/gigglin/My_server/backup/backup.sh` backs up `/srv/nextcloud-data` (4 TB HDD) + `nextcloud-db` dump to Backblaze B2 (`--host homelab`).
+Local `vzdump` was retired on 2026-11-13 (it filled the 600 GB `backups` LV and failed). All backups are Restic snapshots in one B2 repository, as on the pre-Proxmox Ubuntu server. Never re-add a local full-VM job without asking the owner.
+
+1. **Daily `04:30` host time (`gigglin-pve`, currently UTC+5: `02:30` MSK)**: `/root/backup/pve-restic-backup.sh` ([`backup/pve-restic-backup.sh`](./backup/pve-restic-backup.sh)) runs pre-backup DB dumps inside all contour VMs via `qm guest exec`, exports Proxmox & OpenWrt configs, mounts read-only LVM-thin snapshots of all 7 Linux VMs (`110..171`), backs them up to Backblaze B2 (`--host gigglin-pve`, tag `contours`), uploads the Windows `corp-win10` (`VM 170`) disk as one crash-consistent raw image (tag `vm170`, restore with `restic dump`), runs retention prune per tag group, and sends a Telegram notification. The script sets its own administrative `PATH` so root cron can resolve `qm`, LVM tools, and `kpartx`.
+2. **Daily `03:00` UTC (`gigglin-personal`, `VM 120`)**: `/home/gigglin/My_server/backup/backup.sh` backs up `/srv/nextcloud-data` (4 TB HDD) + `nextcloud-db` dump to Backblaze B2 (`--host homelab`).

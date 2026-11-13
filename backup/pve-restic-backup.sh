@@ -13,6 +13,9 @@
 
 set -Eeuo pipefail
 
+# Cron does not include administrative tool directories in its default PATH.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
 LOG_FILE="/var/log/pve-restic-backup.log"
@@ -28,6 +31,11 @@ CONTOURS=(
   "160:llm"
   "171:corp-gw"
 )
+
+# Windows corporate VM: no guest agent and an NTFS disk, so it is backed up
+# as one raw, crash-consistent disk image instead of mounted files.
+WIN_VMID=170
+WIN_SNAP="snap_bkp_${WIN_VMID}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "[$(date "+%F %T")] ERROR: $ENV_FILE not found" | tee -a "$LOG_FILE"
@@ -69,6 +77,9 @@ cleanup() {
       lvremove -f "/dev/pve/${snap}" >/dev/null 2>&1 || true
     fi
   done
+  if lvs "/dev/pve/${WIN_SNAP}" >/dev/null 2>&1; then
+    lvremove -f "/dev/pve/${WIN_SNAP}" >/dev/null 2>&1 || true
+  fi
   rm -rf "$HOST_CFG_DIR"
 }
 trap cleanup EXIT
@@ -179,7 +190,7 @@ fi
 log "Step 4: Running restic backup (${#BACKUP_PATHS[@]} paths)..."
 restic backup \
   --host gigglin-pve \
-  --group-by host \
+  --group-by host,tags \
   --tag contours \
   --tag daily \
   "${BACKUP_PATHS[@]}" \
@@ -193,10 +204,31 @@ restic backup \
   --verbose=1 \
   2>&1 | tee -a "$LOG_FILE"
 
+# --- Step 4b: Raw disk image of the Windows VM (separate snapshot) ---
+# Restic chunks the image content-defined, so only changed regions upload;
+# unallocated thin blocks read as zeros and compress to almost nothing.
+log "Step 4b: Backing up raw disk image of VM ${WIN_VMID} (corp-win10)..."
+if lvcreate -s -kn -pr "pve/vm-${WIN_VMID}-disk-0" -n "$WIN_SNAP" >/dev/null \
+  && restic backup \
+    --host gigglin-pve \
+    --tag vm170 \
+    --tag daily \
+    --stdin-filename "vm-${WIN_VMID}-disk-0.raw" \
+    --stdin-from-command -- cat "/dev/pve/${WIN_SNAP}" \
+    2>&1 | tee -a "$LOG_FILE"; then
+  log "  OK: VM ${WIN_VMID} disk image uploaded"
+else
+  log "  WARNING: VM ${WIN_VMID} disk image backup failed"
+  WARNINGS=$((WARNINGS + 1))
+fi
+lvremove -f "/dev/pve/${WIN_SNAP}" >/dev/null 2>&1 || true
+
 # --- Step 5: Retention & prune (strictly scoped to --host gigglin-pve) ---
+# Group by tags so the contours and vm170 snapshots keep their own history.
 log "Step 5: Applying retention policy (--host gigglin-pve)..."
 if ! restic forget \
   --host gigglin-pve \
+  --group-by host,tags \
   --keep-daily 14 \
   --keep-weekly 8 \
   --keep-monthly 6 \
@@ -211,5 +243,5 @@ log "Completed in $((DURATION/60))m $((DURATION%60))s (${WARNINGS} warning(s))"
 if [[ "$WARNINGS" -gt 0 ]]; then
   notify "⚠️ Contours backup finished in $((DURATION/60))m $((DURATION%60))s with ${WARNINGS} warning(s)"
 else
-  notify "✅ Contours backup (7 VMs + PVE + Router) finished in $((DURATION/60))m $((DURATION%60))s"
+  notify "✅ Contours backup (7 VMs + VM 170 image + PVE + Router) finished in $((DURATION/60))m $((DURATION%60))s"
 fi

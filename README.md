@@ -42,12 +42,12 @@ All workloads are isolated into **7 L3-segmented VLAN contours** on internal tru
 
 ---
 
-## 💾 Two-Tier Backup Strategy
+## 💾 Backup Strategy (Restic → Backblaze B2)
 
-1. **Local Full-VM Snapshots (`03:30` daily on `gigglin-pve`)**:
-   - Proxmox `vzdump` ([`infra/proxmox/jobs.cfg`](./infra/proxmox/jobs.cfg)) takes `zstd`-compressed QEMU snapshots of all 9 active VMs (`110..171`) into `/mnt/backups/dump` (`keep-daily=4, keep-weekly=2`).
-2. **Centralized Off-Site Backblaze B2 Restic Backups**:
-   - **`04:30` on `gigglin-pve` ([`backup/pve-restic-backup.sh`](./backup/pve-restic-backup.sh))**: Triggers consistent DB dumps (`Postgres`/`MariaDB`) inside all contour VMs over `qemu-guest-agent` (virtio-serial, zero network pinholes and zero B2 keys inside application VMs), exports Proxmox & OpenWrt configs, mounts brief `fsfreeze` read-only LVM-thin snapshots of all 7 Linux VMs, and pushes deduplicated backups to Backblaze B2 (`--host gigglin-pve`) with Telegram status alerts.
+Local Proxmox `vzdump` was retired on 2026-11-13; every backup is an encrypted, deduplicated Restic snapshot in Backblaze B2. The Windows `corp-win10` VM (`170`) is backed up as a raw disk image.
+
+1. **Centralized Off-Site Backblaze B2 Restic Backups**:
+   - **`04:30` host time (currently `02:30` Moscow time) on `gigglin-pve`**: Runs [`backup/pve-restic-backup.sh`](./backup/pve-restic-backup.sh). See the [feature documentation and coverage index](./docs/features/INDEX.md) for the centralized backup flow and verification rules.
    - **`03:00` UTC on `VM 120` ([`backup/backup.sh`](./backup/backup.sh))**: Incrementally backs up the 4 TB raw HDD (`/srv/nextcloud-data`) + `nextcloud-db` dump to Backblaze B2 (`--host homelab`).
 
 ---
@@ -64,7 +64,7 @@ All workloads are isolated into **7 L3-segmented VLAN contours** on internal tru
 ## 📂 Repository Layout
 
 - `AGENTS.md` / `CLAUDE.md` — Comprehensive context, rules, and deploy reference for AI coding agents.
-- `infra/proxmox/` — Proxmox VE network trunk (`vmbr0`/`vmbr1`) and `vzdump` backup schedule.
+- `infra/proxmox/` — Proxmox VE network trunk (`vmbr0`/`vmbr1`).
 - `infra/openwrt-router/` — Sanitized OpenWrt `network`, `firewall`, `dhcp`, `20-hairpin-dnat.nft`, `95-webrtc-dnat`, `99-singbox-route`, `sing-box.config.example.json`, and `test-contours.sh`.
 - `backup/` — Centralized Proxmox QGA+LVM Restic script (`pve-restic-backup.sh`) and Nextcloud HDD Restic script (`backup.sh`).
 - `claude-sdk-host/` — Contour network override for `claude-sdk-host` (`VM 150`).
