@@ -1,0 +1,114 @@
+diff --git a/dify-agent/src/dify_agent/layers/shell/layer.py b/dify-agent/src/dify_agent/layers/shell/layer.py
+index 00037427..aa816610 100644
+--- a/dify-agent/src/dify_agent/layers/shell/layer.py
++++ b/dify-agent/src/dify_agent/layers/shell/layer.py
+@@ -2,6 +2,8 @@
+ 
+ from __future__ import annotations
+ 
++import asyncio
++
+ from collections.abc import Awaitable, Callable, Sequence
+ import json
+ import logging
+@@ -197,6 +199,25 @@ class State(BaseModel):
+         return self
+ 
+ 
++async def _await_cancellation_safe[T](task: asyncio.Task[T]) -> T:
++    """Finish job creation or cleanup before propagating caller cancellation."""
++    try:
++        return await asyncio.shield(task)
++    except asyncio.CancelledError:
++        # A second cancel must not abandon an in-flight creation or cleanup.
++        while not task.done():
++            try:
++                await asyncio.shield(task)
++            except asyncio.CancelledError:
++                continue
++            except Exception:
++                break
++        if not task.cancelled():
++            # Retrieve a failed task's exception without replacing cancellation.
++            task.exception()
++        raise
++
++
+ CompleteRemoteCommandResult = CompleteShellCommandResult
+ 
+ 
+@@ -272,7 +293,10 @@ class Capability(AbstractCapability[Deps]):
+             return await handler()
+         finally:
+             try:
+-                await session._delete_tracked_jobs_best_effort(session.runtime_state.job_ids)
++                cleanup = asyncio.create_task(
++                    session._delete_tracked_jobs_best_effort(session.runtime_state.job_ids)
++                )
++                await _await_cancellation_safe(cleanup)
+             finally:
+                 session._clear_tracked_jobs()
+                 del ctx.deps.resources.shells[self.name]
+@@ -326,18 +350,24 @@ class ShellSession:
+         try:
+             env = self._build_shell_command_env(include_agent_stub_env=True)
+             agent_stub_token = env.get(AGENT_STUB_AUTH_JWE_ENV_VAR)
+-            result = await self._require_resource().commands.run(
+-                _wrap_user_script(script, self.config),
+-                cwd=self._require_workspace_cwd(),
+-                env=env,
+-                timeout=timeout,
+-            )
+-            # Register the remote job before observing output so cancellation during
+-            # a tail request still leaves cleanup with its job and redaction token.
+-            self._remember_job_id(result.job_id)
+-            self._remember_job_offset(result.job_id, 0)
+-            if agent_stub_token is not None and not result.done:
+-                self._job_agent_stub_tokens[result.job_id] = agent_stub_token
++            async def start_and_track() -> ShellCommandResult:
++                # Obtain the handle before waiting for command output. If the
++                # caller cancels during this request, finish registering its job.
++                started = await self._require_resource().commands.run(
++                    _wrap_user_script(script, self.config),
++                    cwd=self._require_workspace_cwd(),
++                    env=env,
++                    timeout=0.001,
++                )
++                self._remember_job_id(started.job_id)
++                self._remember_job_offset(started.job_id, 0)
++                if agent_stub_token is not None and not started.done:
++                    self._job_agent_stub_tokens[started.job_id] = agent_stub_token
++                return started
++
++            result = await _await_cancellation_safe(asyncio.create_task(start_and_track()))
++            if not result.done and not result.output and timeout > 0.0:
++                result = await self._require_resource().commands.wait(result.job_id, offset=0, timeout=timeout)
+             observation = await render_prompt_observation_from_result(
+                 self._require_resource().commands,
+                 result,
+@@ -565,7 +595,8 @@ class ShellSession:
+         commands = self._require_resource().commands
+         for job_id in _deduplicate_preserving_order(job_ids):
+             try:
+-                await commands.delete(job_id, force=True)
++                # Layer exit must not leave a grace window for descendant actions.
++                await commands.delete(job_id, force=True, grace_seconds=0.0)
+             except RuntimeError as exc:
+                 logger.warning(
+                     "Failed to delete shell job %s: %s",
+diff --git a/dify-agent/src/dify_agent/server/sse.py b/dify-agent/src/dify_agent/server/sse.py
+index 09c72673..45ce5447 100644
+--- a/dify-agent/src/dify_agent/server/sse.py
++++ b/dify-agent/src/dify_agent/server/sse.py
+@@ -33,9 +33,9 @@ def format_sse_event(event: RunEvent) -> str:
+ async def sse_event_stream(
+     events: AsyncIterable[RunEvent],
+     *,
+-    heartbeat_interval_seconds: float = 15.0,
++    heartbeat_interval_seconds: float = 0.5,
+ ) -> AsyncIterator[str]:
+-    """Yield events and keep idle SSE connections observable to clients."""
++    """Keep idle streams observable so client stop/deadline checks can run."""
+     if heartbeat_interval_seconds <= 0:
+         raise ValueError("heartbeat_interval_seconds must be positive")
+ 

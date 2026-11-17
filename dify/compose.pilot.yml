@@ -1,0 +1,13 @@
+# Apply after the pinned upstream docker/docker-compose.yaml.
+services:
+  nginx:
+    ports: !override
+      - "127.0.0.1:18080:80"
+
+  plugin_daemon:
+    ports: !reset []
+
+  web:
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+
