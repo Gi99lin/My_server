@@ -58,14 +58,14 @@ BK_IP="194.60.132.37"
 
 echo "=== 1. Exit IP per contour (Normal state: KZ primary active) ==="
 expect_eq "VLAN 10 (edge)     exit IP" "$(probe 10 https://ifconfig.me)" "$HOME_IP"
-expect_eq "VLAN 20 (personal) exit IP" "$(probe 20 https://ifconfig.me)" "$HOME_IP"
+expect_eq "VLAN 20 (personal) exit IP" "$(probe 20 https://ifconfig.me)" "$KZ_IP"
 expect_eq "VLAN 30 (apps)     exit IP" "$(probe 30 https://ifconfig.me)" "$HOME_IP"
 expect_eq "VLAN 40 (dev)      exit IP" "$(probe 40 https://ifconfig.me)" "$KZ_IP"
 expect_eq "VLAN 50 (agents)   exit IP" "$(probe 50 https://ifconfig.me)" "$KZ_IP"
 expect_eq "VLAN 60 (llm)      exit IP" "$(probe 60 https://ifconfig.me)" "$KZ_IP"
 expect_eq "VLAN 70 (corp)     exit IP" "$(probe 70 https://ifconfig.me)" "$HOME_IP"
 
-echo "=== 2. Selective proxy in personal/apps (Telegram & Open-Meteo) ==="
+echo "=== 2. Telegram and Open-Meteo reachability in personal/apps ==="
 c_tg20=$(probe_code 20 https://api.telegram.org)
 c_tg30=$(probe_code 30 https://api.telegram.org)
 c_mt20=$(probe_code 20 -k https://149.154.166.110)

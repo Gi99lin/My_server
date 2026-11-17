@@ -39,9 +39,31 @@
         "type": "udp",
         "tag": "dns-direct",
         "server": "8.8.8.8"
+      },
+      {
+        "type": "udp",
+        "tag": "dns-awg-local",
+        "server": "127.0.0.1",
+        "server_port": 53
       }
     ],
     "rules": [
+      {
+        "inbound": "awg-dns",
+        "domain_suffix": [
+          "home.arpa",
+          "lan",
+          "10.in-addr.arpa",
+          "168.192.in-addr.arpa"
+        ],
+        "action": "route",
+        "server": "dns-awg-local"
+      },
+      {
+        "inbound": "awg-dns",
+        "action": "route",
+        "server": "dns-kz"
+      },
       {
         "domain_suffix": [
           ".home.arpa"
@@ -105,7 +127,8 @@
       },
       {
         "source_ip_cidr": [
-          "10.10.40.0/24"
+          "10.10.40.0/24",
+          "10.10.20.0/24"
         ],
         "server": "dns-failover"
       },
@@ -147,6 +170,12 @@
       "tag": "agents-http-in",
       "listen": "10.10.50.1",
       "listen_port": 1080
+    },
+    {
+      "type": "direct",
+      "tag": "awg-dns",
+      "listen": "10.10.99.1",
+      "listen_port": 1053
     }
   ],
   "outbounds": [
@@ -187,6 +216,17 @@
   "route": {
     "default_domain_resolver": "dns-direct",
     "rules": [
+      {
+        "inbound": "awg-dns",
+        "source_ip_cidr": [
+          "10.10.99.2/32"
+        ],
+        "action": "hijack-dns"
+      },
+      {
+        "inbound": "awg-dns",
+        "action": "reject"
+      },
       {
         "action": "sniff",
         "timeout": "300ms"
@@ -266,7 +306,8 @@
       },
       {
         "source_ip_cidr": [
-          "10.10.40.0/24"
+          "10.10.40.0/24",
+          "10.10.20.0/24"
         ],
         "outbound": "proxy-failover"
       },
