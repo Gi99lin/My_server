@@ -1,0 +1,9 @@
+{
+  "app": "my-server",
+  "ui": false,
+  "base_url": "",
+  "start_command": "",
+  "start_cwd": "",
+  "ready_timeout_ms": 120000,
+  "credentials": []
+}

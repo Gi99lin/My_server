@@ -158,3 +158,4 @@ config domain
 config domain
 	option name 'omni.home.arpa'
 	option ip '10.10.60.10'
+

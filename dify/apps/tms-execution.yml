@@ -1,0 +1,532 @@
+app:
+  description: 'TMS agent runs: the loop and the model only; every tool is the TMS''s
+    tms-execution-dify.'
+  icon: 🧪
+  icon_background: '#E0F2FE'
+  icon_type: emoji
+  mode: workflow
+  name: tms-execution
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/agent:0.0.51@3c6c32e593b33476cb52f4e5aaf1bf23e1c71b3d07ba64d40690e0dbce3a7e34
+    version: null
+kind: app
+site:
+  chat_color_theme: null
+  chat_color_theme_inverted: false
+  copyright: null
+  custom_disclaimer: ''
+  default_language: en-US
+  description: null
+  icon: 🧪
+  icon_background: '#E0F2FE'
+  icon_type: emoji
+  input_placeholder: null
+  privacy_policy: null
+  show_workflow_steps: true
+  title: tms-execution
+  use_icon_as_answer_icon: false
+version: 0.7.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload: {}
+    sensitive_word_avoidance:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        sourceType: start
+        targetType: agent
+      id: start-agent
+      source: start
+      sourceHandle: source
+      target: agent
+      targetHandle: target
+      type: custom
+    - data:
+        sourceType: agent
+        targetType: end
+      id: agent-end
+      source: agent
+      sourceHandle: source
+      target: end
+      targetHandle: target
+      type: custom
+    nodes:
+    - data:
+        title: Start
+        type: start
+        variables:
+        - label: Instruction
+          max_length: 200000
+          options: []
+          required: true
+          type: paragraph
+          variable: instruction
+        - label: Task
+          max_length: 200000
+          options: []
+          required: true
+          type: paragraph
+          variable: task
+        - label: Run token
+          max_length: 512
+          options: []
+          required: true
+          type: text-input
+          variable: run_token
+      id: start
+      position:
+        x: 80
+        y: 280
+      type: custom
+    - data:
+        agent_parameters:
+          instruction:
+            type: mixed
+            value: '{{#start.instruction#}}'
+          maximum_iterations:
+            type: constant
+            value: 300
+          model:
+            type: constant
+            value:
+              completion_params:
+                max_tokens: 4096
+              mode: chat
+              model: cx/gpt-6.1-sol-medium
+              model_type: llm
+              provider: langgenius/openai_api_compatible/openai_api_compatible
+              type: model-selector
+          query:
+            type: mixed
+            value: '{{#start.task#}}'
+          tools:
+            type: constant
+            value:
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                path:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+              provider_name: tms-execution
+              provider_show_name: TMS execution
+              settings: {}
+              tool_description: Открывает страницу стенда по пути (например /login?x=1);
+                принимает только путь на стенде, не адрес; переходы за его пределы
+                запрещены.
+              tool_label: browser_open
+              tool_name: browser_open
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+              provider_name: tms-execution
+              provider_show_name: TMS execution
+              settings: {}
+              tool_description: Возвращает дерево доступности текущей страницы и ссылки
+                на элементы.
+              tool_label: browser_snapshot
+              tool_name: browser_snapshot
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                ref:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+              provider_name: tms-execution
+              provider_show_name: TMS execution
+              settings: {}
+              tool_description: Нажимает элемент по ref из последнего снимка.
+              tool_label: browser_click
+              tool_name: browser_click
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                ref:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                text:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution
+              provider_show_name: TMS execution
+              settings: {}
+              tool_description: Вводит обычный текст в элемент по ref.
+              tool_label: browser_type
+              tool_name: browser_type
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                field:
+                  auto: 1
+                  value: null
+                ref:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+              provider_name: tms-execution
+              provider_show_name: TMS execution
+              settings: {}
+              tool_description: Вводит именованное поле набора учётных данных этого
+                прогона; значение не возвращается.
+              tool_label: browser_fill_credential
+              tool_name: browser_fill_credential
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                ref:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                value:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution
+              provider_show_name: TMS execution
+              settings: {}
+              tool_description: Выбирает значение списка по ref.
+              tool_label: browser_select
+              tool_name: browser_select
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                key:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+              provider_name: tms-execution
+              provider_show_name: TMS execution
+              settings: {}
+              tool_description: Нажимает клавишу в текущей странице.
+              tool_label: browser_press
+              tool_name: browser_press
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                seconds:
+                  auto: 1
+                  value: null
+                text:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution
+              provider_show_name: TMS execution
+              settings: {}
+              tool_description: Ждёт текст или число секунд.
+              tool_label: browser_wait
+              tool_name: browser_wait
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                point_id:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                step_id:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution
+              provider_show_name: TMS execution
+              settings: {}
+              tool_description: Сохраняет замаскированный снимок в доказательства
+                текущей попытки.
+              tool_label: browser_screenshot
+              tool_name: browser_screenshot
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+              provider_name: tms-execution
+              provider_show_name: TMS execution
+              settings: {}
+              tool_description: 'Следующий тест-поинт вашего прогона в порядке выполнения
+                (сначала зависимости, затем read_only, mutating, destructive) со шагами,
+                их step_id и агент-спецификацией, либо point: null, когда поинтов
+                не осталось. Начатый, но не завершённый поинт возвращается первым.'
+              tool_label: next_point
+              tool_name: next_point
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                point_id:
+                  auto: 1
+                  value: null
+                request_id:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+              provider_name: tms-execution
+              provider_show_name: TMS execution
+              settings: {}
+              tool_description: 'Начинает попытку выполнения тест-поинта вашего прогона
+                («Начать»). Повторный вызов возвращает ту же попытку. Необязательный
+                request_id (до 128 символов): повтор вызова с тем же request_id возвращает
+                прежний результат.'
+              tool_label: start_attempt
+              tool_name: start_attempt
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                comment:
+                  auto: 1
+                  value: null
+                point_id:
+                  auto: 1
+                  value: null
+                request_id:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                status:
+                  auto: 1
+                  value: null
+                step_id:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution
+              provider_show_name: TMS execution
+              settings: {}
+              tool_description: 'Сохраняет результат одного шага начатой попытки:
+                status — passed, failed, blocked или skipped; comment — коротко, что
+                вы увидели. Необязательный request_id: повтор с тем же request_id
+                не создаёт дубликат.'
+              tool_label: record_step
+              tool_name: record_step
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                file:
+                  auto: 1
+                  value: null
+                filename:
+                  auto: 1
+                  value: null
+                kind:
+                  auto: 1
+                  value: null
+                point_id:
+                  auto: 1
+                  value: null
+                request_id:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                step_id:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution
+              provider_show_name: TMS execution
+              settings: {}
+              tool_description: 'Добавляет доказательство к шагу, у которого уже есть
+                результат: kind — screenshot, trace, console или dom; file — содержимое
+                файла в base64; необязательные filename и request_id. Вложение с секретом
+                стенда не сохраняется.'
+              tool_label: attach_evidence
+              tool_name: attach_evidence
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                point_id:
+                  auto: 1
+                  value: null
+                request_id:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                summary:
+                  auto: 1
+                  value: null
+                verdict:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution
+              provider_show_name: TMS execution
+              settings: {}
+              tool_description: 'Завершает попытку («Завершить»): verdict — passed,
+                failed, blocked или skipped; summary — абзац итога, он сохраняется
+                как комментарий попытки. Шаги без результата при verdict не passed
+                записываются как skipped. Необязательный request_id.'
+              tool_label: finish_attempt
+              tool_name: finish_attempt
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                point_id:
+                  auto: 1
+                  value: null
+                reason:
+                  auto: 1
+                  value: null
+                request_id:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+              provider_name: tms-execution
+              provider_show_name: TMS execution
+              settings: {}
+              tool_description: 'Передаёт тест-поинт человеку («Передать»): снимает
+                исполнителя, чтобы поинт мог взять человек; reason сохраняется как
+                комментарий попытки; прогон идёт дальше. Необязательный request_id.'
+              tool_label: hand_off
+              tool_name: hand_off
+              type: mcp
+        agent_strategy_label: FunctionCalling
+        agent_strategy_name: function_calling
+        agent_strategy_provider_name: langgenius/agent/agent
+        title: Agent
+        tool_node_version: '2'
+        type: agent
+      id: agent
+      position:
+        x: 480
+        y: 280
+      type: custom
+    - data:
+        outputs:
+        - value_selector:
+          - agent
+          - text
+          value_type: string
+          variable: text
+        title: End
+        type: end
+      id: end
+      position:
+        x: 880
+        y: 280
+      type: custom
+  rag_pipeline_variables: []

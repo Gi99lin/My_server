@@ -1,0 +1,124 @@
+app:
+  description: 'TMS autotest authoring: one model call, no tools; the TMS checks and
+    runs the source.'
+  icon: 🧪
+  icon_background: '#E0F2FE'
+  icon_type: emoji
+  mode: workflow
+  name: tms-authoring
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openai_api_compatible:0.0.73@4cf123ffaa4556f079bed6c47f3a462cc825504b859b183239e74eb19136a4b5
+    version: null
+kind: app
+site:
+  chat_color_theme: null
+  chat_color_theme_inverted: false
+  copyright: null
+  custom_disclaimer: ''
+  default_language: en-US
+  description: null
+  icon: 🧪
+  icon_background: '#E0F2FE'
+  icon_type: emoji
+  input_placeholder: null
+  privacy_policy: null
+  show_workflow_steps: true
+  title: tms-authoring
+  use_icon_as_answer_icon: false
+version: 0.7.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload: {}
+    sensitive_word_avoidance:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        sourceType: start
+        targetType: llm
+      id: start-llm
+      source: start
+      sourceHandle: source
+      target: llm
+      targetHandle: target
+      type: custom
+    - data:
+        sourceType: llm
+        targetType: end
+      id: llm-end
+      source: llm
+      sourceHandle: source
+      target: end
+      targetHandle: target
+      type: custom
+    nodes:
+    - data:
+        title: Start
+        type: start
+        variables:
+        - label: Instruction
+          max_length: 200000
+          options: []
+          required: true
+          type: paragraph
+          variable: instruction
+        - label: Task
+          max_length: 200000
+          options: []
+          required: true
+          type: paragraph
+          variable: task
+      id: start
+      position:
+        x: 80
+        y: 280
+      type: custom
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params:
+            max_tokens: 4096
+          mode: chat
+          name: cx/gpt-6.1-sol-medium
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - role: system
+          text: '{{#start.instruction#}}'
+        - role: user
+          text: '{{#start.task#}}'
+        title: Author
+        type: llm
+        vision:
+          enabled: false
+      id: llm
+      position:
+        x: 480
+        y: 280
+      type: custom
+    - data:
+        outputs:
+        - value_selector:
+          - llm
+          - text
+          value_type: string
+          variable: text
+        title: End
+        type: end
+      id: end
+      position:
+        x: 880
+        y: 280
+      type: custom
+  rag_pipeline_variables: []

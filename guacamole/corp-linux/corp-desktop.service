@@ -1,0 +1,20 @@
+[Unit]
+Description=Persistent corporate XFCE desktop for Guacamole
+After=network-online.target user@1000.service
+Wants=network-online.target user@1000.service
+
+[Service]
+Type=simple
+User=gigglin
+Group=gigglin
+WorkingDirectory=/home/gigglin
+Environment=HOME=/home/gigglin
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStart=/usr/bin/tigervncserver :1 -fg -interface 10.10.70.21 -localhost no -SecurityTypes VncAuth -geometry 1920x1080 -depth 24 -AlwaysShared
+ExecStop=-/usr/bin/tigervncserver -kill :1
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,43 @@
+services:
+  sdk-netguard:
+    ports:
+      - "0.0.0.0:${SDK_API_PORT:-18090}:8080"
+    environment:
+      CLIENTS_SUBNET: 10.0.0.0/8
+    networks:
+      sdk_access:
+        ipv4_address: 10.253.241.2
+
+  sdk-credentials:
+    image: claude-sdk-credentials:local
+    container_name: claude-sdk-tms-credentials
+    user: "1000:1000"
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      XDG_CONFIG_HOME: /tmp/config
+      XDG_DATA_HOME: /tmp/data
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    volumes:
+      - /home/gigglin/.config/claude-sdk-host/tms-provider-tls/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /home/gigglin/.config/claude-sdk-host/tms-provider-tls/server.crt:/run/tls/server.crt:ro
+      - /home/gigglin/.config/claude-sdk-host/tms-provider-tls/server.key:/run/tls/server.key:ro
+    networks:
+      sdk_tools:
+        ipv4_address: 10.253.240.21
+      sdk_access:
+        ipv4_address: 10.253.241.3
+
+networks:
+  sdk_access:
+    name: claude_sdk_access
+    internal: false
+    ipam:
+      config:
+        - subnet: 10.253.241.0/28
+          gateway: 10.253.241.1

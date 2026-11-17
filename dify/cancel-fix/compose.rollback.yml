@@ -1,0 +1,5 @@
+# Apply last to restore the original unmodified Agent Backend image.
+services:
+  agent_backend:
+    image: langgenius/dify-agent-backend@sha256:80d638d7114bb0fbe954952e37da1f464b61969ff870c0b173963b9f2b91e06e
+    pull_policy: never
