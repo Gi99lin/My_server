@@ -1,5 +1,11 @@
 # Guacamole
 
+> Current Proxmox deployment: Guacamole runs on `gigglin-corp-gw` in
+> `/home/gigglin/guacamole`, serving `https://rdp.gigglin.tech`. Windows VM 170
+> remains at `10.10.70.20`; the [corporate Linux pilot](./corp-linux/README.md)
+> is VM 172 at `10.10.70.21`. The libvirt topology below is historical.
+> Functional requirements and coverage: [feature index](../docs/features/INDEX.md).
+
 HTML5 RDP/VNC gateway. Used to reach the Windows 10 VM (libvirt/KVM) running
 on this host from a browser, without installing an RDP client on the laptop.
 

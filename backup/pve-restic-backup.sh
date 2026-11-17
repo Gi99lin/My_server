@@ -5,7 +5,7 @@
 # 1. Triggers consistent DB dumps inside each contour VM via qemu-guest-agent
 #    (virtio-serial, zero inter-VLAN firewall holes, zero DB passwords on PVE).
 # 2. Exports Proxmox (/etc/pve + host network/LVM) & OpenWrt router configs.
-# 3. Takes brief fsfreeze + read-only LVM-thin snapshots of all 7 Linux VMs,
+# 3. Takes brief fsfreeze + read-only LVM-thin snapshots of all Linux contour VMs,
 #    mounts them read-only (ro,norecovery), and runs a single deduplicated
 #    restic backup to Backblaze B2 (--host gigglin-pve).
 # 4. Cleans up mounts/snapshots via EXIT trap and sends Telegram report via QGA.
@@ -30,6 +30,7 @@ CONTOURS=(
   "150:agents"
   "160:llm"
   "171:corp-gw"
+  "172:corp-linux"
 )
 
 # Windows corporate VM: no guest agent and an NTFS disk, so it is backed up
@@ -171,7 +172,7 @@ for entry in "${CONTOURS[@]}"; do
   mount -o ro,norecovery "/dev/mapper/pve-${snap}p1" "$mnt"
   log "  Mounted RO snapshot for VM $vmid ($name) at $mnt"
 
-  for sub in home/gigglin var/lib/docker/volumes var/backups/contour-db-dumps etc; do
+  for sub in home/gigglin var/lib/docker/volumes var/backups/contour-db-dumps etc opt/securitycode; do
     [[ -e "$mnt/$sub" ]] && BACKUP_PATHS+=("$mnt/$sub")
   done
 done
@@ -243,5 +244,5 @@ log "Completed in $((DURATION/60))m $((DURATION%60))s (${WARNINGS} warning(s))"
 if [[ "$WARNINGS" -gt 0 ]]; then
   notify "⚠️ Contours backup finished in $((DURATION/60))m $((DURATION%60))s with ${WARNINGS} warning(s)"
 else
-  notify "✅ Contours backup (7 VMs + VM 170 image + PVE + Router) finished in $((DURATION/60))m $((DURATION%60))s"
+  notify "✅ Contours backup (${#CONTOURS[@]} Linux VMs + VM 170 image + PVE + Router) finished in $((DURATION/60))m $((DURATION%60))s"
 fi
