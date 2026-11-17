@@ -26,12 +26,12 @@ All contour VMs use SSH key `~/.ssh/id_ed25519_gigglin` (via `ProxyJump gigglin-
 |---|---|---|---|---|---|---|
 | **mgmt** | `pve`<br>`110` | Host<br>`1 GB` / `4G` | `192.168.1.12`<br>`192.168.1.13` (`awg0` `10.10.99.1/24`) | `gigglin-pve` (`https://pve.home.arpa`)<br>`gigglin-router` (`http://router.home.arpa`) | Hypervisor & L3 security/routing appliance. Public DNS (`8.8.8.8`, `1.1.1.1`), `AmneziaWG` (`43821/udp`), `sing-box` (`sb0`), `nftables`. | Proxmox VE 9.2; OpenWrt 25.12.6 |
 | **1. edge** | `111` | `1.5 GB` / `20G` | VLAN 10 — `10.10.10.10` (`.11` NPM Admin VIP) | `gigglin-edge` (`edge.home.arpa`, `http://npm.home.arpa`) | **Public ingress & static/demo frontends** (zero private data). Egress: **Direct ISP**. | `nginx-proxy-manager` + `npm-db`, `landing` (`gigglin.tech`), `life-dashboard-demo` (`demo.gigglin.tech`), `status-dashboard-demo` (`infra.gigglin.tech`), `watchtower` |
-| **2. personal** | `120` | `5 GB` / `60G` + `4 TB HDD` | VLAN 20 — `10.10.20.10` | `gigglin-personal` (`personal.home.arpa`) | **Owner-only personal cloud, dashboards & monitoring**. Egress: **Direct ISP**, except Telegram & `*.open-meteo.com` → `proxy-failover` (fail-closed). | `nextcloud` (`cloud.gigglin.tech` + MariaDB + Redis; personal hub — Calendar, Tasks, Notes — operated by Claude via local MCP, see [`docs/features/personal-hub.md`](./docs/features/personal-hub.md)), `life-dashboard` (`dash.gigglin.tech`), `status-dashboard-api`, `mcp-telegram-cloud` (`mcp-tg.gigglin.tech`), `prometheus` + `grafana` (`grafana.gigglin.tech`) |
+| **2. personal** | `120` | `5 GB` / `60G` + `4 TB HDD` | VLAN 20 — `10.10.20.10` | `gigglin-personal` (`personal.home.arpa`) | **Owner-only personal cloud, dashboards & monitoring**. Egress is **100% via `proxy-failover`** with DoH via the same proxy (fail-closed). | `nextcloud` (`cloud.gigglin.tech` + MariaDB + Redis; personal hub — Calendar, Tasks, Notes — operated by Claude via local MCP, see [`docs/features/personal-hub.md`](./docs/features/personal-hub.md)), `life-dashboard` (`dash.gigglin.tech`), `status-dashboard-api`, `mcp-telegram-cloud` (`mcp-tg.gigglin.tech`), `prometheus` + `grafana` (`grafana.gigglin.tech`) |
 | **3. apps** | `130` | `8 GB` / `160G` | VLAN 30 — `10.10.30.10` | `gigglin-apps` (`apps.home.arpa`, `youtrack.home.arpa`) | **Multi-user & production applications**. Egress: **Direct ISP**, except Telegram → `proxy-failover` (fail-closed). | `youtrack` (`youtrack.gigglin.tech`), `fluxer` (`fluxer.gigglin.tech` + LiveKit `7881/tcp`, `7882/udp`), `ai-testcase-generator` (`tms.gigglin.tech`, `tms-files.gigglin.tech`, `testcase-tunnel`), `hrbot_prod` (DB `:5432`), `manager-helper`, `ai-presentation`, `watchtower` |
 | **4. dev** | `140` | `3.5 GB` / `80G` | VLAN 40 — `10.10.40.10` | `gigglin-dev` (`dev.home.arpa`) | **Dev/staging stacks & CI runners**. Egress: **100% via `proxy-failover`** (`212.116.240.211` → `194.60.132.37`, fail-closed). | `dmaic-studio` (`dmaic.gigglin.tech`), `dmaic-old` (`dmaic-old.gigglin.tech`), `hrbot_dev` (DB `:5433`), `github-runner` (`tms-ci-dind`), `actions-runner-dmaic.service`, `watchtower` |
-| **5. agents** | `150` | `2 GB` / `40G` | VLAN 50 — `10.10.50.10` | `gigglin-agents` (`agents.home.arpa`) | **Autonomous AI agent runtimes**. Egress: **strict single proxy `proxy-kz`** (`212.116.240.211`, **never rotates to US**, fail-closed). | `claude-sdk-host` (`:18090` + `tms-credentials` + `egress`/`netguard`), `hermes-tasks` |
+| **5. agents** | `150` | `6 GiB` / `80G` (4 vCPU) | VLAN 50 — `10.10.50.10` | `gigglin-agents` (`agents.home.arpa`) | **Autonomous AI agent runtimes**. Egress: **strict single proxy `proxy-kz`** (`212.116.240.211`, **never rotates to US**, fail-closed). | `claude-sdk-host` (`:18090` + `tms-credentials` + `egress`/`netguard`), `hermes-tasks`; Dify pilot deployment and evidence in [`dify/README.md`](./dify/README.md) |
 | **6. llm** | `160` | `1.5 GB` / `25G` | VLAN 60 — `10.10.60.10` | `gigglin-llm` (`llm.home.arpa`, `http://omni.home.arpa`) | **Single LLM API gateway**. Egress: **strict single proxy `proxy-kz`** (`212.116.240.211`, **never rotates to US**, fail-closed). | `omniroute` (`:20131` `/v1/*` API gateway + VPN-only `:20130` Admin UI) |
-| **7. corp** | `171`<br>`170` | `1 GB` / `20G`<br>`4 GB` / `90G` | VLAN 70 — `10.10.70.10`<br>VLAN 70 — `10.10.70.20` | `gigglin-corp-gw` (`corp-gw.home.arpa`)<br>`corp-vm` (`corp-win10.home.arpa`, `corp-socks`) | **Isolated corporate contour** (zero access to `VLAN 10..60` or home LAN). Egress: **Direct ISP**. | `corp-gw`: `guacamole` (`rdp.gigglin.tech`), `trueconf` (daily cron), VDI reverse-tunnel SSH endpoint (`18080–18090`).<br>`corp-win10`: native Windows 10 corp-VPN VM |
+| **7. corp** | `171`<br>`170` | `1 GB` / `20G`<br>`4 GB` / `90G` | VLAN 70 — `10.10.70.10`<br>VLAN 70 — `10.10.70.20` | `gigglin-corp-gw` (`corp-gw.home.arpa`)<br>`corp-vm` (`corp-win10.home.arpa`, retained Windows rollback) | **Isolated corporate contour** (zero access to `VLAN 10..60` or home LAN). Egress: **Direct ISP**. | `corp-gw`: `guacamole` (`rdp.gigglin.tech`), `trueconf` (daily cron), VDI reverse-tunnel SSH endpoint (`18080–18090`).<br>`corp-win10`: native Windows 10 corp-VPN VM |
 
 ---
 
@@ -81,7 +81,7 @@ Config files live in [`infra/openwrt-router/`](./infra/openwrt-router). After an
   - On the Mac, `sudo bash ~/corp-tunnel.sh` (canonical copy: `~/skills/runbooks/corp-tunnel/corp-tunnel.sh`) connects via `root@192.168.1.13` → `gigglin@10.10.70.10` so it works on both home Wi-Fi and AmneziaWG VPN (falling back to `gigglin@128.0.130.144` if outside without VPN).
 - **Windows 10 Corporate VPN VM (`corp-win10`, `VM 170`, `10.10.70.20`)**:
   - Desktop access via `https://rdp.gigglin.tech` (`guacamole` on `corp-gw`).
-  - On-demand SOCKS5 tunnel on Mac: `ssh -f -N corp-socks` (listens on `127.0.0.1:1082`).
+  - The Mac `corp-socks` tunnel now targets Linux VM 172, not this retained Windows VM. It listens on `127.0.0.1:1082`; see the Linux pilot runbook.
   - **Windows OpenSSH note**: Win10 uses MSI `Win32-OpenSSH` in `C:\Program Files\OpenSSH`. If `sshd` service needs re-registration inside Windows PowerShell (Admin):
     ```powershell
     & "C:\Program Files\OpenSSH\install-sshd.ps1"
@@ -90,11 +90,20 @@ Config files live in [`infra/openwrt-router/`](./infra/openwrt-router). After an
     New-NetFirewallRule -Name "ssh-from-corp-gw" -DisplayName "OpenSSH from corp-gw and VPN" -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -RemoteAddress 10.10.70.0/24,10.10.99.0/24
     ```
 
+### Corporate Linux pilot (`VM 172`, `10.10.70.21`)
+- Ubuntu 22.04.5, XFCE/X11, 2 vCPU / 2 GiB RAM / 24 GiB ext4 disk in VLAN 70.
+- Existing Guacamole gateway has a `Corp Linux (pilot)` VNC connection to `10.10.70.21:5901`, with restricted-key SFTP and a pinned server host key.
+- Continent ZTN 4.5.0-1269 and Horizon 2609 (8.20.0) are installed. Registration, corporate authentication, real Horizon use and VPN routing validation are pending.
+- Windows VM 170 is stopped with `onboot: 0` at the owner's request (2026-11-16); its 120 GiB disk and Guacamole entries are retained. `corp-socks` now targets Linux VM 172 through `gigglin-corp-gw`, using user `gigglin` and the HomeLab SSH key.
+- SSH: `ssh -J gigglin-corp-gw -i ~/.ssh/id_ed25519_gigglin gigglin@10.10.70.21`.
+- Desktop service/configuration and operational checks: [`guacamole/corp-linux/README.md`](./guacamole/corp-linux/README.md). The Linux account password is in macOS Keychain under service `HomeLab corp-linux desktop`, account `gigglin`.
+- Central Restic coverage includes VM 172 home, `/etc`, and `/opt/securitycode`; no local full-VM backup job was added.
+
 ### Mac 3-Tunnel Client Architecture (`Proxifier` + `awg-wireproxy`)
 - **Tunnels**:
   1. `127.0.0.1:10808` (`Proxy 100`) — `Happ` (`xray`) for general geo-blocked sites AND `dash.gigglin.tech` (`104.21.44.30; 172.67.194.85`, which sits behind Cloudflare Proxy and would otherwise hit RKN's 19 KB TCP block over `Direct`).
   2. `127.0.0.1:1081` (`Proxy 101`) — `awg-wireproxy` LaunchAgent (`local.awg-wireproxy`, config `~/.config/wireproxy/awg-homelab.conf`) for `192.168.1.12; 192.168.1.13; 10.10.0.0/16; *.home.arpa`.
-  3. `127.0.0.1:1082` (`Proxy 102`) — `ssh -f -N corp-socks` for corporate domains/subnets (`*.rshbank.ru; *.rshb.ru; *.sberbank.ru; 172.16.0.0/12; 10.0.0.0/8`), placed **below** HomeLab `10.10.0.0/16` (`Proxy 101`) and VDI local aliases `10.26.5.79; 10.30.176.222` (`Direct`).
+  3. `127.0.0.1:1082` (`Proxy 102`) — SSH `corp-socks` to Linux VM 172 (`10.10.70.21`, connected ZTN VPN) for corporate domains/subnets (`*.rshbank.ru; *.rshb.ru; *.sberbank.ru; 172.16.0.0/12; 10.0.0.0/8`), placed **below** HomeLab `10.10.0.0/16` (`Proxy 101`) and VDI local aliases `10.26.5.79; 10.30.176.222` (`Direct`).
 
 ---
 
