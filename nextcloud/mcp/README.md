@@ -31,3 +31,19 @@ Behavior and rules: [`docs/features/personal-hub.md`](../../docs/features/person
 nextcloud/mcp/smoke-test.sh                 # PASS: Nextcloud MCP with 49 tools
 NEXTCLOUD_MCP_USER=nobody ~/.local/bin/nextcloud-mcp </dev/null  # exit 1, clear stderr
 ```
+
+## Capability check (2026-11-17, server 0.213.1)
+
+Run against throwaway `zz-test-*` data, removed afterwards.
+
+| Operation | Result | Notes |
+|---|---|---|
+| Create / delete task lists | ✅ | `nc_calendar_manage_calendar` `create` / `delete` |
+| Task with due date, priority, description | ✅ | Pass `due` with an explicit offset (owner's Mac is `+02:00`); a naive time is stored as UTC |
+| Subtasks | ❌ | No `RELATED-TO` support; use a checklist in the description instead |
+| Move a task between lists | ⚠️ | No move tool; create in the target list, then delete the original (new UID) |
+| Complete a task | ✅ | `nc_calendar_complete_todo` |
+| Read `LAST-MODIFIED` (stale rule) | ❌ | Not exposed by any tool |
+| Notes in a category | ✅ | Notes folder is `Заметки/` (localized), categories are subfolders |
+| Files: create / list / delete folder | ✅ | WebDAV paths are relative to the user root |
+| Calendar event | ✅ | |
