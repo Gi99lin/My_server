@@ -1,0 +1,158 @@
+#!/usr/bin/env -S python3 -I
+"""List open personal-hub tasks that have not changed for N days (read-only).
+
+The Nextcloud MCP server does not expose a task's LAST-MODIFIED, which the
+hub's stale rule needs, so this script asks CalDAV directly. It only reads:
+one PROPFIND to find task lists and one REPORT per list.
+
+Usage: hub-stale-tasks [--days 21] [--json]
+Credentials: the same Keychain entry as the MCP wrapper
+(service "HomeLab nextcloud-mcp", account NEXTCLOUD_MCP_USER or "admin").
+"""
+import argparse
+import base64
+import json
+import os
+import re
+import subprocess
+import sys
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta, timezone
+
+HOST = os.environ.get("NEXTCLOUD_MCP_HOST", "https://cloud.gigglin.tech")
+USER = os.environ.get("NEXTCLOUD_MCP_USER", "admin")
+SERVICE = "HomeLab nextcloud-mcp"
+NS = {"d": "DAV:", "c": "urn:ietf:params:xml:ns:caldav"}
+
+
+def die(msg):
+    print(f"hub-stale-tasks: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def _unfold(ics):
+    return re.sub(r"\r?\n[ \t]", "", ics)
+
+
+def _unescape(value):
+    return value.replace("\\n", "\n").replace("\\N", "\n").replace("\\,", ",").replace("\\;", ";").replace("\\\\", "\\")
+
+
+def _parse_utc(value):
+    value = value.strip()
+    for fmt in ("%Y%m%dT%H%M%SZ", "%Y%m%dT%H%M%S", "%Y%m%d"):
+        try:
+            return datetime.strptime(value, fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return None
+
+
+def parse_todo(ics):
+    """Return {uid, summary, last_modified, open} for the first VTODO in an iCalendar text."""
+    body = _unfold(ics)
+    m = re.search(r"BEGIN:VTODO(.*?)END:VTODO", body, re.S)
+    props = {}
+    for line in (m.group(1) if m else "").splitlines():
+        if ":" not in line:
+            continue
+        name, value = line.split(":", 1)
+        props.setdefault(name.split(";", 1)[0].upper(), value)
+    status = props.get("STATUS", "NEEDS-ACTION").upper()
+    last = _parse_utc(props["LAST-MODIFIED"]) if "LAST-MODIFIED" in props else None
+    if last is None and "DTSTAMP" in props:
+        last = _parse_utc(props["DTSTAMP"])
+    return {
+        "uid": props.get("UID", ""),
+        "summary": _unescape(props.get("SUMMARY", "")),
+        "last_modified": last,
+        "open": status not in ("COMPLETED", "CANCELLED") and "COMPLETED" not in props,
+    }
+
+
+def is_stale(todo, now, days):
+    """Open and unchanged for more than `days` days; an unknown date counts as stale."""
+    if not todo["open"]:
+        return False
+    if todo["last_modified"] is None:
+        return True
+    return now - todo["last_modified"] > timedelta(days=days)
+
+
+def _password():
+    try:
+        out = subprocess.run(
+            ["/usr/bin/security", "find-generic-password", "-s", SERVICE, "-a", USER, "-w"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except subprocess.TimeoutExpired:
+        die("Keychain did not answer within 5 s")
+    if out.returncode != 0 or not out.stdout.strip():
+        die(f"no app password in Keychain (service '{SERVICE}', account '{USER}')")
+    return out.stdout.strip()
+
+
+def _dav(method, path, body, depth, auth):
+    req = urllib.request.Request(
+        HOST + path, data=body.encode(), method=method,
+        headers={"Authorization": auth, "Depth": depth, "Content-Type": "application/xml; charset=utf-8"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return ET.fromstring(resp.read())
+    except urllib.error.HTTPError as e:
+        die(f"{method} {path} failed: HTTP {e.code}" + (" (app password revoked?)" if e.code == 401 else ""))
+    except urllib.error.URLError as e:
+        die(f"cannot reach {HOST}: {e.reason}")
+
+
+def task_lists(auth):
+    root = _dav("PROPFIND", f"/remote.php/dav/calendars/{USER}/",
+                '<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop>'
+                "<d:displayname/><c:supported-calendar-component-set/></d:prop></d:propfind>", "1", auth)
+    lists = []
+    for r in root.findall("d:response", NS):
+        comps = [c.get("name") for c in r.findall(".//c:supported-calendar-component-set/c:comp", NS)]
+        if "VTODO" in comps:
+            name = r.findtext(".//d:displayname", default="", namespaces=NS)
+            lists.append((urllib.parse.unquote(r.findtext("d:href", namespaces=NS)), name))
+    return lists
+
+
+def todos_in(href, auth):
+    root = _dav("REPORT", href,
+                '<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
+                "<d:prop><c:calendar-data/></d:prop><c:filter><c:comp-filter name=\"VCALENDAR\">"
+                '<c:comp-filter name="VTODO"/></c:comp-filter></c:filter></c:calendar-query>', "1", auth)
+    return [parse_todo(e.text or "") for e in root.findall(".//c:calendar-data", NS)]
+
+
+def main():
+    ap = argparse.ArgumentParser(description="List open hub tasks unchanged for more than N days (read-only).")
+    ap.add_argument("--days", type=int, default=21)
+    ap.add_argument("--json", action="store_true")
+    args = ap.parse_args()
+    auth = "Basic " + base64.b64encode(f"{USER}:{_password()}".encode()).decode()
+    now = datetime.now(timezone.utc)
+    stale = []
+    for href, name in task_lists(auth):
+        for t in todos_in(href, auth):
+            if is_stale(t, now, args.days):
+                lm = t["last_modified"]
+                stale.append({"list": name, "summary": t["summary"], "uid": t["uid"],
+                              "last_modified": lm.date().isoformat() if lm else None,
+                              "days": (now - lm).days if lm else None})
+    stale.sort(key=lambda s: s["days"] if s["days"] is not None else 10**6, reverse=True)
+    if args.json:
+        print(json.dumps(stale, ensure_ascii=False, indent=2))
+        return
+    if not stale:
+        print(f"No open tasks unchanged for more than {args.days} days.")
+    for s in stale:
+        print(f"{s['days'] if s['days'] is not None else '?':>4}d  {s['list']}  {s['summary']}  [{s['uid']}]")
+
+
+if __name__ == "__main__":
+    main()

@@ -9,6 +9,7 @@ Behavior and rules: [`docs/features/personal-hub.md`](../../docs/features/person
 | File | Role |
 |---|---|
 | `nextcloud-mcp-stdio.sh` | Wrapper. Reads the app password from the Keychain and `exec`s `uvx nextcloud-mcp-server==0.213.1 run --transport stdio` with only the `calendar` (incl. tasks), `notes` and `webdav` APIs. Installed as `~/.local/bin/nextcloud-mcp` (symlink). |
+| `hub-stale-tasks` | Read-only CalDAV check for the stale rule: lists open tasks whose `LAST-MODIFIED` is older than `--days` (default 21). Same Keychain entry. Installed as `~/.local/bin/hub-stale-tasks`. Tests: `python3 -I nextcloud/mcp/test_hub_stale_tasks.py`. |
 | `smoke-test.sh` | Sends MCP `initialize` + `tools/list` and expects `serverInfo` and calendar tools. |
 
 ## Credentials
@@ -43,7 +44,7 @@ Run against throwaway `zz-test-*` data, removed afterwards.
 | Subtasks | ❌ | No `RELATED-TO` support; use a checklist in the description instead |
 | Move a task between lists | ⚠️ | No move tool; create in the target list, then delete the original (new UID) |
 | Complete a task | ✅ | `nc_calendar_complete_todo` |
-| Read `LAST-MODIFIED` (stale rule) | ❌ | Not exposed by any tool |
+| Read `LAST-MODIFIED` (stale rule) | ❌ | Not exposed by any tool → covered by `hub-stale-tasks` |
 | Notes in a category | ✅ | Notes folder is `Заметки/` (localized), categories are subfolders |
 | Files: create / list / delete folder | ✅ | WebDAV paths are relative to the user root |
 | Calendar event | ✅ | |
