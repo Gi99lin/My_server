@@ -16,7 +16,6 @@ import os
 import re
 import subprocess
 import sys
-import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
@@ -25,6 +24,15 @@ HOST = os.environ.get("NEXTCLOUD_MCP_HOST", "https://cloud.gigglin.tech")
 USER = os.environ.get("NEXTCLOUD_MCP_USER", "admin")
 SERVICE = "HomeLab nextcloud-mcp"
 NS = {"d": "DAV:", "c": "urn:ietf:params:xml:ns:caldav"}
+# Only the hub's own task lists. Shared lists (other users) and the default
+# `personal` calendar are never scanned, so a review can't touch their tasks.
+HUB_LISTS = ("hub-inbox", "networking", "intl-saas", "tms-kz-market", "notary",
+             "tanks", "tms-mflash", "company-kz")
+
+
+def is_hub_list(href):
+    """True when a calendar collection href is one of the hub's own task lists."""
+    return href.rstrip("/").rsplit("/", 1)[-1] in HUB_LISTS
 
 
 def die(msg):
@@ -115,9 +123,10 @@ def task_lists(auth):
     lists = []
     for r in root.findall("d:response", NS):
         comps = [c.get("name") for c in r.findall(".//c:supported-calendar-component-set/c:comp", NS)]
-        if "VTODO" in comps:
+        href = r.findtext("d:href", default="", namespaces=NS)  # raw: sent back as-is
+        if "VTODO" in comps and is_hub_list(href):
             name = r.findtext(".//d:displayname", default="", namespaces=NS)
-            lists.append((urllib.parse.unquote(r.findtext("d:href", namespaces=NS)), name))
+            lists.append((href, name))
     return lists
 
 

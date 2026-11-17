@@ -57,5 +57,21 @@ class IsStale(unittest.TestCase):
     def test_unknown_date_is_stale(self):
         self.assertTrue(hst.is_stale(self.todo(None), NOW, 21))
 
+class HubListFilter(unittest.TestCase):
+    def test_hub_list_is_kept(self):
+        self.assertTrue(hst.is_hub_list("/remote.php/dav/calendars/admin/tanks/"))
+
+    def test_inbox_is_kept(self):
+        self.assertTrue(hst.is_hub_list("/remote.php/dav/calendars/admin/hub-inbox/"))
+
+    def test_shared_list_is_skipped(self):
+        self.assertFalse(hst.is_hub_list("/remote.php/dav/calendars/admin/personal_shared_by_dmitriy/"))
+
+    def test_default_personal_calendar_is_skipped(self):
+        self.assertFalse(hst.is_hub_list("/remote.php/dav/calendars/admin/personal/"))
+
+    def test_percent_encoded_href_does_not_crash(self):
+        self.assertFalse(hst.is_hub_list("/remote.php/dav/calendars/admin/%D0%A1%D0%BF%D0%B8%D1%81%D0%BE%D0%BA/"))
+
 if __name__ == "__main__":
     unittest.main()

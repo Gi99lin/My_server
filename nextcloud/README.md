@@ -19,7 +19,7 @@ Installed from the app store on 2026-11-17:
 |---|---|---|
 | `calendar` | 6.6.5 | Events (CalDAV) |
 | `tasks` | 0.18.1 | The single task store (CalDAV `VTODO`, synced to Reminders) |
-| `notes` | 5.0.2 | Markdown notes under `Notes/` |
+| `notes` | 5.0.2 | Markdown notes under `Заметки/` (localized folder) |
 
 Deck is intentionally not installed: it would be a second task store.
 

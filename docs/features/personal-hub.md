@@ -36,9 +36,10 @@ sorts and reviews items through MCP, and the owner just uses the result.
 
 ## Layout
 
-- Task lists: `Inbox` plus one list per active project or life area.
-- Notes: `Notes/<Project>/…`; hub housekeeping in `Notes/Hub/Retro` and
-  `Notes/Hub/Reviews`.
+- Task lists: `Inbox` plus one list per vector: Нетворкинг, Международка с SaaS,
+  ТМС рынок КЗ, Нотариус, Танки, ТМС через мфлеш, Компания КЗ.
+- Notes: `Заметки/<Project>/…` (the Notes app's localized folder);
+  hub housekeeping in `Заметки/Hub/Retro` and `Заметки/Hub/Reviews`.
 - Files: `Projects/<Project>/…`; finished projects move to `Archive/`.
 
 ## Main flow
@@ -60,9 +61,9 @@ sorts and reviews items through MCP, and the owner just uses the result.
    - what is stale.
    Stale tasks are offered as one batch ("close / archive / keep"), and the
    owner answers once. The review date is written to the first line of
-   `Notes/Hub/Reviews` as `Last review: YYYY-MM-DD`.
+   `Заметки/Hub/Reviews` as `Last review: YYYY-MM-DD`.
 5. **Retro.** When the owner says they feel like dropping the system, Claude
-   records the date and the reason in `Notes/Hub/Retro` and proposes one
+   records the date and the reason in `Заметки/Hub/Retro` and proposes one
    concrete fix for that cause.
 
 ## Alternative flows
@@ -71,7 +72,7 @@ sorts and reviews items through MCP, and the owner just uses the result.
   In the next "what's on my plate" conversation, Claude sees that the
   `Last review` date is more than 7 days old and runs the review first.
 - **New project.** The owner starts something new. Claude creates the task
-  list, the `Notes/<Project>` category and the `Projects/<Project>/` folder
+  list, the `Заметки/<Project>` category and the `Projects/<Project>/` folder
   under the same name.
 - **Finished project.** Claude proposes moving it to `Archive/`. The move
   happens only after the owner confirms.
@@ -92,7 +93,15 @@ sorts and reviews items through MCP, and the owner just uses the result.
   old.
 - Claude never deletes a task, note, file or event without the owner's
   explicit confirmation of that item. It prefers completing, archiving or
-  moving.
+  moving. Archiving a task sets it to CANCELLED in its list; archiving a
+  project moves its folders to `Archive/`.
+- Moving a task between lists keeps its title, description, priority, dates,
+  categories and reminders. A recurring task, or one with details that can't
+  be copied, stays in `Inbox` and Claude asks.
+- The stale check only looks at the hub's own lists, never at lists other
+  users share or the default calendar.
+- In a plain Claude Desktop chat (no shell) Claude uses a time zone the owner
+  stated or a date-only due date, and says the stale check needs Claude Code.
 - Claude never closes stale tasks on its own. The weekly review only
   proposes them.
 
