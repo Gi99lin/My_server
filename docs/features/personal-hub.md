@@ -81,6 +81,11 @@ sorts and reviews items through MCP, and the owner just uses the result.
 - Personal only. Work (corporate) tasks, notes and files are never stored.
   If asked to file a work item, Claude declines and says the hub is
   personal-only.
+- No invented structure: task lists are the owner's business vectors plus
+  `Нетворкинг`, with no Business/Life split. Claude never adds due dates, goals
+  or schedules the owner did not state, and does not push targets onto life
+  outside these lists. At most it keeps a guidepost the owner named (for
+  example "sleep 8 hours").
 - There is exactly one task store: Nextcloud Tasks (CalDAV). There are no
   Deck boards.
 - A stale task is an open task whose last modification is more than 21 days
