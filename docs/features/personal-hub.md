@@ -37,7 +37,7 @@ sorts and reviews items through MCP, and the owner just uses the result.
 ## Layout
 
 - Task lists: `Inbox` plus one list per vector: Нетворкинг, Международка с SaaS,
-  ТМС рынок КЗ, Нотариус, Танки, ТМС через мфлеш, Компания КЗ.
+  ТМС рынок КЗ, Нотариус, Танки, ТМС через мфлеш, Компания КЗ, Рутина.
 - Notes: `Заметки/<Project>/…` (the Notes app's localized folder);
   hub housekeeping in `Заметки/Hub/Retro` and `Заметки/Hub/Reviews`.
 - Files: `Projects/<Project>/…`; finished projects move to `Archive/`.

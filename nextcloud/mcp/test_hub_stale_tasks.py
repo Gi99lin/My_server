@@ -61,6 +61,9 @@ class HubListFilter(unittest.TestCase):
     def test_hub_list_is_kept(self):
         self.assertTrue(hst.is_hub_list("/remote.php/dav/calendars/admin/tanks/"))
 
+    def test_routine_is_kept(self):
+        self.assertTrue(hst.is_hub_list("/remote.php/dav/calendars/admin/routine/"))
+
     def test_inbox_is_kept(self):
         self.assertTrue(hst.is_hub_list("/remote.php/dav/calendars/admin/hub-inbox/"))
 

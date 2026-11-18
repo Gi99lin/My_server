@@ -27,7 +27,7 @@ NS = {"d": "DAV:", "c": "urn:ietf:params:xml:ns:caldav"}
 # Only the hub's own task lists. Shared lists (other users) and the default
 # `personal` calendar are never scanned, so a review can't touch their tasks.
 HUB_LISTS = ("hub-inbox", "networking", "intl-saas", "tms-kz-market", "notary",
-             "tanks", "tms-mflash", "company-kz")
+             "tanks", "tms-mflash", "company-kz", "routine")
 
 
 def is_hub_list(href):
