@@ -87,6 +87,14 @@ idempotent and prints no secrets). Exported definitions, without secrets: [`apps
   old password gets `WRONGPASS`, the new one `PONG`, no authentication errors in api or worker, and a streamed run goes
   `workflow_started` → nodes → `text_chunk` → `workflow_finished`. When editing `compose.env`, keep the password inside
   `CELERY_BROKER_URL` equal to `REDIS_PASSWORD`.
+- **Celery concurrency, 2026-11-22.** Every app run (agent and workflow alike) is a Celery task
+  `workflow_based_app_execution_task`, and the worker ran with `CELERY_WORKER_AMOUNT=1` (gevent pool, one greenlet).
+  An agent session holds that slot for its whole test point (minutes), so the TMS supervisor workflow asked during it
+  was only received after the point ended — the TMS gave up after its 90 s deadline and logged «Надзор недоступен»
+  (TMS findings 43, 47). The private `compose.env` now has `CELERY_WORKER_AMOUNT=4` (backup
+  `compose.env.bak-2026-11-22-celery`), applied with `docker compose -p dify-pilot up -d worker` from the upstream
+  Docker directory. Any concurrent use — two agent runs, an agent and its supervisor, authoring beside a run — needs
+  more than one slot.
 - Provider credentials use `mode=chat`, `api_type=chat_completions`, `function_calling_type=tool_call`, `stream_function_calling=supported`, and `stream_include_usage=enabled`.
 - Pilot model settings use a 128000-token configured context limit, a 4096-token provider output ceiling, and a 2048-token agent output limit. These are pilot configuration values, not claims about the model's maximum capabilities.
 - Published agent: `TMS Dify Pilot`, ID `01a1a0b0-66b7-7175-a045-ee18798441c1`.
