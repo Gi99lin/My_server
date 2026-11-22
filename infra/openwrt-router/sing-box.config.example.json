@@ -172,6 +172,12 @@
       "listen_port": 1080
     },
     {
+      "type": "http",
+      "tag": "pve-backup-http-in",
+      "listen": "192.168.1.13",
+      "listen_port": 1081
+    },
+    {
       "type": "direct",
       "tag": "awg-dns",
       "listen": "10.10.99.1",
@@ -242,6 +248,21 @@
       },
       {
         "ip_is_private": true,
+        "action": "reject"
+      },
+      {
+        "inbound": "pve-backup-http-in",
+        "source_ip_cidr": [
+          "192.168.1.12/32"
+        ],
+        "domain_suffix": [
+          "backblazeb2.com",
+          "backblaze.com"
+        ],
+        "outbound": "proxy-failover"
+      },
+      {
+        "inbound": "pve-backup-http-in",
         "action": "reject"
       },
       {

@@ -499,3 +499,11 @@ config rule
 	option dest_port '8080'
 	option target 'ACCEPT'
 
+config rule
+	option name 'PVE-to-backup-proxy'
+	option src 'wan'
+	option src_ip '192.168.1.12'
+	option proto 'tcp'
+	option dest_port '1081'
+	option target 'ACCEPT'
+

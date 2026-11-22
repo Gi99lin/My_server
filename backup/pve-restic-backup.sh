@@ -15,6 +15,11 @@ set -Eeuo pipefail
 
 # Cron does not include administrative tool directories in its default PATH.
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+# restic keeps its index cache under $HOME; systemd-run and similar launchers
+# leave it unset, which makes every run re-download all index files.
+export HOME="${HOME:-/root}"
+# The run lock below keeps fd 9 open; LVM would warn about it on every call.
+export LVM_SUPPRESS_FD_WARNINGS=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
@@ -48,6 +53,30 @@ set -a
 source "$ENV_FILE"
 set +a
 export RESTIC_REPOSITORY="b2:${B2_BUCKET_NAME}"
+
+# The host's direct ISP path to the B2 download cluster (f003.backblazeb2.com)
+# was cut in November 2026, which left restic hanging at "open repository".
+# B2 traffic therefore goes through the router's sing-box HTTP inbound
+# (pve-backup-http-in, 192.168.1.13:1081), which only accepts this host and
+# only *.backblazeb2.com, and sends it out via proxy-failover.
+export HTTPS_PROXY="${B2_HTTPS_PROXY:-http://192.168.1.13:1081}"
+export NO_PROXY="localhost,127.0.0.1,192.168.1.0/24,10.10.0.0/16"
+
+# Upper bounds so a stalled upload fails loudly instead of blocking later runs.
+RESTIC_BACKUP_TIMEOUT="${RESTIC_BACKUP_TIMEOUT:-3h}"
+RESTIC_PRUNE_TIMEOUT="${RESTIC_PRUNE_TIMEOUT:-2h}"
+
+# One run at a time. This must come before the EXIT trap: a second instance
+# would otherwise remove the snapshots the first one is still reading.
+exec 9>/run/pve-restic-backup.lock
+if ! flock -n 9; then
+  echo "[$(date "+%F %T")] SKIPPED: another backup run still holds the lock" >> "$LOG_FILE"
+  exit 1
+fi
+
+# Cron discards the script's output, so keep stderr (lvcreate, mount, restic
+# errors) in the log.
+exec 2>>"$LOG_FILE"
 
 log() {
   echo "[$(date "+%F %T")] $*" | tee -a "$LOG_FILE"
@@ -92,6 +121,20 @@ on_error() {
 }
 trap 'on_error $LINENO' ERR
 
+# lvcreate occasionally fails transiently (exit 5); retry before giving up.
+create_snapshot() {
+  local origin="$1" snap="$2" attempt
+  for attempt in 1 2 3; do
+    if lvcreate -s -kn -pr "$origin" -n "$snap" >/dev/null; then
+      return 0
+    fi
+    log "  lvcreate $snap failed (attempt $attempt/3)"
+    lvremove -f "/dev/pve/${snap}" >/dev/null 2>&1 || true
+    sleep 10
+  done
+  return 1
+}
+
 if [[ -f "$LOG_FILE" ]] && [[ $(wc -l < "$LOG_FILE") -gt 5000 ]]; then
   tail -5000 "$LOG_FILE" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "$LOG_FILE"
 fi
@@ -101,6 +144,10 @@ WARNINGS=0
 log "=========================================="
 log "Starting centralized PVE -> Backblaze B2 backup"
 log "=========================================="
+
+# Holding the lock means no other run is alive, so any snapshot or mount left
+# over from a crashed run is stale and would make lvcreate fail.
+( cleanup )
 
 # --- Step 1: Pre-snapshot DB dumps inside each contour VM via QGA ---
 log "Step 1: Running consistent DB dumps inside contour VMs via QGA..."
@@ -165,7 +212,10 @@ for entry in "${CONTOURS[@]}"; do
   mkdir -p "$mnt"
 
   qm guest cmd "$vmid" fsfreeze-freeze >/dev/null 2>&1 || true
-  lvcreate -s -kn -pr "pve/vm-${vmid}-disk-0" -n "$snap" >/dev/null
+  if ! create_snapshot "pve/vm-${vmid}-disk-0" "$snap"; then
+    qm guest cmd "$vmid" fsfreeze-thaw >/dev/null 2>&1 || true
+    false
+  fi
   qm guest cmd "$vmid" fsfreeze-thaw >/dev/null 2>&1 || true
 
   kpartx -ar "/dev/pve/${snap}"
@@ -189,7 +239,7 @@ fi
 
 # --- Step 4: Single deduplicated Restic backup to Backblaze B2 ---
 log "Step 4: Running restic backup (${#BACKUP_PATHS[@]} paths)..."
-restic backup \
+timeout --kill-after=2m "$RESTIC_BACKUP_TIMEOUT" restic backup \
   --host gigglin-pve \
   --group-by host,tags \
   --tag contours \
@@ -209,8 +259,8 @@ restic backup \
 # Restic chunks the image content-defined, so only changed regions upload;
 # unallocated thin blocks read as zeros and compress to almost nothing.
 log "Step 4b: Backing up raw disk image of VM ${WIN_VMID} (corp-win10)..."
-if lvcreate -s -kn -pr "pve/vm-${WIN_VMID}-disk-0" -n "$WIN_SNAP" >/dev/null \
-  && restic backup \
+if create_snapshot "pve/vm-${WIN_VMID}-disk-0" "$WIN_SNAP" \
+  && timeout --kill-after=2m "$RESTIC_BACKUP_TIMEOUT" restic backup \
     --host gigglin-pve \
     --tag vm170 \
     --tag daily \
@@ -227,7 +277,7 @@ lvremove -f "/dev/pve/${WIN_SNAP}" >/dev/null 2>&1 || true
 # --- Step 5: Retention & prune (strictly scoped to --host gigglin-pve) ---
 # Group by tags so the contours and vm170 snapshots keep their own history.
 log "Step 5: Applying retention policy (--host gigglin-pve)..."
-if ! restic forget \
+if ! timeout --kill-after=2m "$RESTIC_PRUNE_TIMEOUT" restic forget \
   --host gigglin-pve \
   --group-by host,tags \
   --keep-daily 14 \
