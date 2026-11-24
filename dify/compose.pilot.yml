@@ -12,6 +12,19 @@ services:
     environment:
       THIRD_PARTY_SIGNATURE_VERIFICATION_ENABLED: "true"
       THIRD_PARTY_SIGNATURE_VERIFICATION_PUBLIC_KEYS: /app/storage/keys/tms_plugins.public.pem
+      # An agent strategy runs as one plugin call for the whole session. With screenshots a TMS session runs past the
+      # default 600 s and Dify killed it ("killed by timeout", 2026-11-24). The TMS keeps its own time limits.
+      PLUGIN_MAX_EXECUTION_TIMEOUT: "3600"
+
+  api:
+    environment:
+      PLUGIN_DAEMON_TIMEOUT: "3600.0"
+      PLUGIN_MAX_EXECUTION_TIMEOUT: "3600"
+
+  worker:
+    environment:
+      PLUGIN_DAEMON_TIMEOUT: "3600.0"
+      PLUGIN_MAX_EXECUTION_TIMEOUT: "3600"
 
   web:
     environment:
