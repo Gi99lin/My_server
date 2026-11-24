@@ -6,6 +6,12 @@ services:
 
   plugin_daemon:
     ports: !reset []
+    # Our own plugins (the TMS agent strategy) are signed with our key; Dify's own signature check stays on.
+    # The public key lives in the daemon's storage volume: volumes/plugin_daemon/keys/tms_plugins.public.pem.
+    # The private key is on gigglin-agents in ~/.config/dify-pilot/signing (mode 600), never in Git.
+    environment:
+      THIRD_PARTY_SIGNATURE_VERIFICATION_ENABLED: "true"
+      THIRD_PARTY_SIGNATURE_VERIFICATION_PUBLIC_KEYS: /app/storage/keys/tms_plugins.public.pem
 
   web:
     environment:

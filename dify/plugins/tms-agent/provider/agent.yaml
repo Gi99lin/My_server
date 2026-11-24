@@ -1,0 +1,17 @@
+identity:
+  author: gigglin
+  name: tms_agent
+  label:
+    en_US: Agent
+    zh_Hans: Agent
+    pt_BR: Agent
+  description:
+    en_US: Agent
+    zh_Hans: Agent
+    pt_BR: Agent
+  icon: icon.svg
+strategies:
+  - strategies/function_calling.yaml
+extra:
+  python:
+    source: provider/agent.py
