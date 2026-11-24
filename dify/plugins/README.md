@@ -8,7 +8,10 @@ It is `langgenius/agent 0.0.51` with the ReAct strategy removed and five changes
 1. A tool's image blob (Dify turns an MCP `ImageContent` into one) is no longer replaced by «Generated file ...».
 2. After all of a round's tool answers, one user message carries that round's images at high detail.
 3. A vision model keeps every image in the history; only a model without vision gets the «[image]» placeholder.
-4. The plugin is `gigglin/tms_agent`, version 0.1.0, strategy `function_calling_vision`.
+4. The plugin is `gigglin/tms_agent`, strategy `function_calling_vision`.
+5. (0.1.1, `patch_strategy_v2.py`) Dify hands a tool's image to the strategy as a signed `/files/` image link, not a
+   blob; the strategy downloads it from Dify's API (`DIFY_INNER_API_URL`, default `http://api:5001`) and passes it on
+   the same way. A failed download is told to the model in one line.
 
 ### Rebuild
 
@@ -21,7 +24,8 @@ cd .. && ./dify plugin package ./tms-agent -o tms-agent-0.1.0.difypkg
 ./dify signature sign tms-agent-0.1.0.difypkg -p ~/.config/dify-pilot/signing/tms_plugins.private.pem
 ```
 
-Install the `.signed.difypkg` through «Плагины → Установить из локального пакета» or the console API.
+This Dify version has no upgrade from a local package: uninstall the old version, then install the new one
+(`upgrade_plugin.py` uploads; the install endpoint installs). Install the `.signed.difypkg` through «Плагины → Установить из локального пакета» or the console API.
 
 ### Signing
 
