@@ -12,6 +12,10 @@ It is `langgenius/agent 0.0.51` with the ReAct strategy removed and five changes
 5. (0.1.1, `patch_strategy_v2.py`) Dify hands a tool's image to the strategy as a signed `/files/` image link, not a
    blob; the strategy downloads it from Dify's API (`DIFY_INNER_API_URL`, default `http://api:5001`) and passes it on
    the same way. A failed download is told to the model in one line.
+6. (0.1.2, `patch_strategy_v3.py`, replaces 5) The link Dify gives is unsigned and a plugin cannot fetch it (the
+   SDK can only upload files). The TMS also puts the picture into the tool's text as `data:image/...;base64,...`; the
+   strategy takes it out, gives it to the model and leaves «[изображение]» in the text, so neither the history nor
+   Dify's logs carry the base64. The image link is forwarded to the user only.
 
 ### Rebuild
 
@@ -25,7 +29,7 @@ cd .. && ./dify plugin package ./tms-agent -o tms-agent-0.1.0.difypkg
 ```
 
 This Dify version has no upgrade from a local package: uninstall the old version, then install the new one
-(`upgrade_plugin.py` uploads; the install endpoint installs). Install the `.signed.difypkg` through «Плагины → Установить из локального пакета» or the console API.
+(`reinstall_plugin.py PATH.signed.difypkg` does all three). Install the `.signed.difypkg` through «Плагины → Установить из локального пакета» or the console API.
 
 ### Signing
 

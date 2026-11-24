@@ -180,6 +180,31 @@ class FunctionCallingAgentStrategy(AgentStrategy):
         )
 
     @staticmethod
+    def _take_data_images(text: str) -> tuple[str, list[ImagePromptMessageContent]]:
+        """Pictures a tool put into its text as data URLs, and the text with each replaced by a short marker."""
+        import re
+
+        images: list[ImagePromptMessageContent] = []
+
+        def take(match: "re.Match[str]") -> str:
+            image_format = match.group(1).lower()
+            if image_format == "jpg":
+                image_format = "jpeg"
+            images.append(
+                ImagePromptMessageContent(
+                    format=image_format,
+                    base64_data=match.group(2),
+                    mime_type=f"image/{image_format}",
+                    filename="",
+                    detail=ImagePromptMessageContent.DETAIL.HIGH,
+                )
+            )
+            return "[изображение]"
+
+        cleaned = re.sub(r"data:image/(png|jpeg|jpg|webp|gif);base64,([A-Za-z0-9+/=]+)", take, text or "")
+        return cleaned, images
+
+    @staticmethod
     def _image_from_link(response: ToolInvokeMessage) -> ImagePromptMessageContent | None:
         """An image link a tool returned (Dify saves a tool's image and passes its signed /files/ link), downloaded
         from Dify's API and returned as prompt content; None when the message carries no link."""
@@ -627,17 +652,10 @@ class FunctionCallingAgentStrategy(AgentStrategy):
                                     ToolInvokeMessage.MessageType.IMAGE_LINK,
                                     ToolInvokeMessage.MessageType.IMAGE,
                                 }:
-                                    # TMS E4: a tool image reaches the model, not only the user.
-                                    try:
-                                        image = self._image_from_link(tool_invoke_response)
-                                    except Exception as error:  # the model is told, the run goes on
-                                        image = None
-                                        tool_result += f"Изображение не удалось передать модели: {type(error).__name__}. "
-                                    if image is not None:
-                                        round_images.append(image)
-                                        tool_result += "Изображение приложено следующим сообщением. "
-                                        yield tool_invoke_response
-                                        continue
+                                    # TMS E4: the model gets the picture from the data URL in the tool's text
+                                    # (Dify's link is unsigned and cannot be fetched); the link goes to the user only.
+                                    yield tool_invoke_response
+                                    continue
                                     # Extract the file path or URL from the message
                                     if hasattr(tool_invoke_response.message, "text"):
                                         file_info = cast(
@@ -711,6 +729,10 @@ class FunctionCallingAgentStrategy(AgentStrategy):
                                     tool_result += (
                                         f"tool response: {tool_invoke_response.message!r}."
                                     )
+                            tool_result, data_images = self._take_data_images(tool_result)
+                            if data_images:
+                                round_images.extend(data_images)
+                                tool_result += " Изображение приложено следующим сообщением."
                         except Exception as e:
                             tool_result = f"tool invoke error: {e!s}"
                         tool_response = {
