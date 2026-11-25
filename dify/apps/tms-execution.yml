@@ -11,7 +11,7 @@ dependencies:
 - current_identifier: null
   type: marketplace
   value:
-    marketplace_plugin_unique_identifier: langgenius/agent:0.0.51@3c6c32e593b33476cb52f4e5aaf1bf23e1c71b3d07ba64d40690e0dbce3a7e34
+    marketplace_plugin_unique_identifier: langgenius/agent:0.0.52@3642f03f1c6316f3f9129fe483213bb80345923962ec3e53a6ba311fdd8d9b6f
     version: null
 kind: app
 site:
@@ -44,6 +44,8 @@ workflow:
   graph:
     edges:
     - data:
+        isInIteration: false
+        isInLoop: false
         sourceType: start
         targetType: agent
       id: start-agent
@@ -52,7 +54,10 @@ workflow:
       target: agent
       targetHandle: target
       type: custom
+      zIndex: 0
     - data:
+        isInIteration: false
+        isInLoop: false
         sourceType: agent
         targetType: end
       id: agent-end
@@ -61,6 +66,7 @@ workflow:
       target: end
       targetHandle: target
       type: custom
+      zIndex: 0
     nodes:
     - data:
         title: Start
@@ -84,11 +90,17 @@ workflow:
           required: true
           type: text-input
           variable: run_token
+      height: 161
       id: start
       position:
         x: 80
         y: 280
+      positionAbsolute:
+        x: 80
+        y: 280
       type: custom
+      width: 242
+      zIndex: 0
     - data:
         agent_parameters:
           instruction:
@@ -510,11 +522,17 @@ workflow:
         title: Agent
         tool_node_version: '2'
         type: agent
+      height: 210
       id: agent
       position:
         x: 480
         y: 280
+      positionAbsolute:
+        x: 480
+        y: 280
       type: custom
+      width: 242
+      zIndex: 0
     - data:
         outputs:
         - value_selector:
@@ -524,9 +542,19 @@ workflow:
           variable: text
         title: End
         type: end
+      height: 88
       id: end
       position:
         x: 880
         y: 280
+      positionAbsolute:
+        x: 880
+        y: 280
       type: custom
+      width: 242
+      zIndex: 0
+    viewport:
+      x: 469.43395056258254
+      y: 54.75471082241191
+      zoom: 1.2492256070303769
   rag_pipeline_variables: []

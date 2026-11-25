@@ -1,0 +1,663 @@
+app:
+  description: 'TMS next: agent runs and stand checks (vision strategy, E4 2026-11-24).'
+  icon: 🧪
+  icon_background: '#E0F2FE'
+  icon_type: emoji
+  mode: workflow
+  name: tms-execution-next
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: package
+  value:
+    plugin_unique_identifier: gigglin/tms_agent:0.1.2@1a3687c884225eafb568119ce4673c1e569c06dc97485828b1b0d3c980ab5694
+    version: null
+kind: app
+site:
+  chat_color_theme: null
+  chat_color_theme_inverted: false
+  copyright: null
+  custom_disclaimer: ''
+  default_language: en-US
+  description: null
+  icon: 🧪
+  icon_background: '#E0F2FE'
+  icon_type: emoji
+  input_placeholder: null
+  privacy_policy: null
+  show_workflow_steps: true
+  title: tms-execution-next
+  use_icon_as_answer_icon: false
+version: 0.7.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload: {}
+    sensitive_word_avoidance:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        sourceType: start
+        targetType: agent
+      id: start-agent
+      source: start
+      sourceHandle: source
+      target: agent
+      targetHandle: target
+      type: custom
+    - data:
+        sourceType: agent
+        targetType: end
+      id: agent-end
+      source: agent
+      sourceHandle: source
+      target: end
+      targetHandle: target
+      type: custom
+    nodes:
+    - data:
+        title: Start
+        type: start
+        variables:
+        - label: Instruction
+          max_length: 200000
+          options: []
+          required: true
+          type: paragraph
+          variable: instruction
+        - label: Task
+          max_length: 200000
+          options: []
+          required: true
+          type: paragraph
+          variable: task
+        - label: Run token
+          max_length: 512
+          options: []
+          required: true
+          type: text-input
+          variable: run_token
+      id: start
+      position:
+        x: 80
+        y: 280
+      type: custom
+    - data:
+        agent_parameters:
+          instruction:
+            type: mixed
+            value: '{{#start.instruction#}}'
+          maximum_iterations:
+            type: constant
+            value: 150
+          model:
+            type: constant
+            value:
+              completion_params:
+                max_tokens: 16000
+              mode: chat
+              model: opencode-go/deepseek-v4.1-flash
+              model_type: llm
+              provider: langgenius/openai_api_compatible/openai_api_compatible
+              type: model-selector
+          query:
+            type: mixed
+            value: '{{#start.task#}}'
+          tools:
+            type: constant
+            value:
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                path:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: Открывает страницу стенда по пути (например /login?x=1);
+                принимает только путь на стенде, не адрес; переходы за его пределы
+                запрещены.
+              tool_label: browser_open
+              tool_name: browser_open
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                ref:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                selector:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: 'Возвращает основное содержимое страницы (область
+                main, а без неё body) и всё, что открыто поверх неё (окна, меню, списки,
+                всплывающие панели; они идут первыми) как дерево доступности и ссылки
+                на элементы, не больше 6 000 символов; если не вошло, ответ говорит,
+                сколько элементов и в каких областях. Шапка и меню навигации не входят:
+                нужна часть вне main — selector (например nav); часть внутри — ref
+                элемента из прошлого снимка или selector. Нужен, когда нужна структура
+                страницы: ответы click, type, select и press уже называют заголовок,
+                сообщения и смену адреса.'
+              tool_label: browser_snapshot
+              tool_name: browser_snapshot
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                label:
+                  auto: 1
+                  value: null
+                name:
+                  auto: 1
+                  value: null
+                ref:
+                  auto: 1
+                  value: null
+                role:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                text:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: 'Нажимает элемент: по ref из снимка или без снимка
+                — по role и name (например role=button, name=Создать), по label поля
+                или по видимому text.'
+              tool_label: browser_click
+              tool_name: browser_click
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                label:
+                  auto: 1
+                  value: null
+                name:
+                  auto: 1
+                  value: null
+                ref:
+                  auto: 1
+                  value: null
+                role:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                submit:
+                  auto: 1
+                  value: null
+                value:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: 'Вводит обычный текст (value) в поле: по ref из снимка,
+                по label поля или по role и name. submit=true нажимает Enter после
+                ввода.'
+              tool_label: browser_type
+              tool_name: browser_type
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                fields:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: 'Заполняет несколько полей за один вызов: fields —
+                список объектов {label или ref, value} (до 20). Ответ — итог по каждому
+                полю.'
+              tool_label: browser_fill_form
+              tool_name: browser_fill_form
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                field:
+                  auto: 1
+                  value: null
+                ref:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: Вводит именованное поле набора учётных данных этого
+                прогона; значение не возвращается.
+              tool_label: browser_fill_credential
+              tool_name: browser_fill_credential
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                label:
+                  auto: 1
+                  value: null
+                name:
+                  auto: 1
+                  value: null
+                ref:
+                  auto: 1
+                  value: null
+                role:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                value:
+                  auto: 1
+                  value: null
+                values:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: 'Выбирает значение списка (value) или несколько значений
+                сразу (values, для списка с множественным выбором): по ref из снимка,
+                по label списка или по role и name.'
+              tool_label: browser_select
+              tool_name: browser_select
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                query:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: Находит на странице видимые элементы, в подписи которых
+                есть query, с их ref (до 15), и строки текста страницы с query. Дешевле
+                снимка, когда знаешь, что ищешь; так же проверяй, есть ли на странице
+                ожидаемый текст.
+              tool_label: browser_find
+              tool_name: browser_find
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                key:
+                  auto: 1
+                  value: null
+                ref:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: Нажимает клавишу в текущей странице. Управляющий символ,
+                который browser_type ввести не может, вводится как key=U+0007 (код
+                в шестнадцатеричном виде) вместе с ref поля.
+              tool_label: browser_press
+              tool_name: browser_press
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                seconds:
+                  auto: 1
+                  value: null
+                text:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: Ждёт текст или число секунд.
+              tool_label: browser_wait
+              tool_name: browser_wait
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                point_id:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                step_id:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: 'Возвращает картинку: что сейчас на экране (видимая
+                часть страницы), вместе с открытыми меню и окнами. Ты видишь эту картинку
+                сам. Без point_id только смотрит: так можно и в сверке со стендом.
+                С point_id (и step_id шага, у которого уже записан результат) ещё
+                и сохраняет снимок в доказательства этого тест-поинта. Поля, в которые
+                введены учётные данные, на картинке закрыты. Если на странице оказался
+                секрет стенда, картинки не будет: ответ — «Вложение скрыто: в нём
+                оказался секрет стенда».'
+              tool_label: browser_screenshot
+              tool_name: browser_screenshot
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                number:
+                  auto: 1
+                  value: null
+                reason:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                stand_text:
+                  auto: 1
+                  value: null
+                status:
+                  auto: 1
+                  value: null
+                where:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: 'Записывает, что показал стенд для одного утверждения
+                документа (только в прогоне сверки со стендом): number — номер утверждения;
+                status — matches (стенд совпадает с документом), diverges (расходится:
+                в stand_text дословно то, что показал стенд), not_found (не нашли:
+                в where — где вы смотрели) или not_checked (с reason: needs_other_user
+                — нужен другой пользователь, not_ui — нельзя проверить через интерфейс).
+                Вы записываете, что видите, и не решаете, кто прав. Статус утверждения,
+                записанный в прошлой сессии, не меняется.'
+              tool_label: record_claim
+              tool_name: record_claim
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                point_id:
+                  auto: 1
+                  value: null
+                request_id:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: 'Начинает попытку выполнения тест-поинта вашего прогона
+                («Начать»). Повторный вызов возвращает ту же попытку. Необязательный
+                request_id (до 128 символов): повтор вызова с тем же request_id возвращает
+                прежний результат.'
+              tool_label: start_attempt
+              tool_name: start_attempt
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                comment:
+                  auto: 1
+                  value: null
+                point_id:
+                  auto: 1
+                  value: null
+                request_id:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                status:
+                  auto: 1
+                  value: null
+                step_id:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: 'Сохраняет результат одного шага начатой попытки:
+                status — passed, failed, blocked или skipped; comment — коротко, что
+                вы увидели. Необязательный request_id: повтор с тем же request_id
+                не создаёт дубликат.'
+              tool_label: record_step
+              tool_name: record_step
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                file:
+                  auto: 1
+                  value: null
+                filename:
+                  auto: 1
+                  value: null
+                kind:
+                  auto: 1
+                  value: null
+                point_id:
+                  auto: 1
+                  value: null
+                request_id:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                step_id:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: 'Добавляет доказательство к шагу, у которого уже есть
+                результат: kind — screenshot, trace, console или dom; file — содержимое
+                файла в base64; необязательные filename и request_id. Вложение с секретом
+                стенда не сохраняется.'
+              tool_label: attach_evidence
+              tool_name: attach_evidence
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                point_id:
+                  auto: 1
+                  value: null
+                request_id:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+                summary:
+                  auto: 1
+                  value: null
+                verdict:
+                  auto: 1
+                  value: null
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: 'Завершает попытку («Завершить»): verdict — passed,
+                failed, blocked или skipped; summary — абзац итога, он сохраняется
+                как комментарий попытки. Шаги без результата при verdict не passed
+                записываются как skipped. Необязательный request_id.'
+              tool_label: finish_attempt
+              tool_name: finish_attempt
+              type: mcp
+            - enabled: true
+              extra:
+                description: ''
+              parameters:
+                point_id:
+                  auto: 1
+                  value: null
+                reason:
+                  auto: 1
+                  value: null
+                request_id:
+                  auto: 1
+                  value: null
+                run_token:
+                  auto: 0
+                  value:
+                    type: variable
+                    value:
+                    - start
+                    - run_token
+              provider_name: tms-execution-next
+              provider_show_name: TMS execution (next)
+              settings: {}
+              tool_description: 'Передаёт тест-поинт человеку («Передать»): снимает
+                исполнителя, чтобы поинт мог взять человек; reason сохраняется как
+                комментарий попытки; прогон идёт дальше. Необязательный request_id.'
+              tool_label: hand_off
+              tool_name: hand_off
+              type: mcp
+        agent_strategy_label: FunctionCalling (vision)
+        agent_strategy_name: function_calling_vision
+        agent_strategy_provider_name: gigglin/tms_agent/tms_agent
+        title: Agent
+        tool_node_version: '2'
+        type: agent
+      id: agent
+      position:
+        x: 480
+        y: 280
+      type: custom
+    - data:
+        outputs:
+        - value_selector:
+          - agent
+          - text
+          value_type: string
+          variable: text
+        title: End
+        type: end
+      id: end
+      position:
+        x: 880
+        y: 280
+      type: custom
+  rag_pipeline_variables: []
